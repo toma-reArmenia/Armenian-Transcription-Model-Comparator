@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Armenian Transcription Comparator</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0f2f5;color:#222;font-size:14px}
+
+/* ── Header */
+.app-header{background:#1a237e;color:#fff;padding:14px 24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+.app-header-left h1{font-size:1.2rem;font-weight:800;color:#fff;margin-bottom:3px}
+.app-header-left .sub{font-size:11px;color:rgba(255,255,255,.65);letter-spacing:.3px}
+.app-header-right{display:flex;gap:8px}
+.btn{padding:7px 16px;border-radius:7px;border:none;cursor:pointer;font-size:13px;font-weight:700;transition:all .15s}
+.btn-light{background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3)}
+.btn-light:hover{background:rgba(255,255,255,.25)}
+.btn-white{background:#fff;color:#1a237e}
+.btn-white:hover{background:#e8eaf6}
+.btn-secondary{background:#fff;border:1.5px solid #ddd;color:#555}
+.btn-secondary:hover{background:#f5f5f5}
+.btn-primary{background:#1a237e;color:#fff}
+.btn-primary:hover{background:#283593}
+
+/* ── Upload */
+#uploadZone{max-width:500px;margin:80px auto;text-align:center;padding:0 16px}
+.drop-area{border:2.5px dashed #c5cae9;border-radius:16px;padding:52px 24px;background:#fff;cursor:pointer;transition:all .2s}
+.drop-area:hover,.drop-area.over{border-color:#3949ab;background:#f3f0ff}
+.drop-area h2{color:#333;margin-bottom:8px;font-size:1.1rem}
+.drop-area p{color:#aaa;font-size:13px;margin-bottom:22px}
+#fileInput{display:none}
+#progress{height:4px;background:#e0e0e0;border-radius:2px;margin:16px auto;max-width:260px;display:none}
+#progress-bar{height:100%;background:#3f51b5;border-radius:2px;width:0;transition:width .2s}
+
+/* ── Main layout */
+.content{max-width:1180px;margin:0 auto;padding:18px 16px}
+
+/* ── Pricing bar */
+.pbar{background:#fff;border-radius:10px;padding:12px 16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.07);display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end}
+.pbar-title{font-size:12px;font-weight:700;color:#888;white-space:nowrap;margin-right:4px;align-self:center}
+.pf{display:flex;flex-direction:column;gap:3px}
+.pf label{font-size:10px;color:#bbb;font-weight:500}
+.pf input{padding:5px 8px;border:1.5px solid #e0e0e0;border-radius:6px;font-size:13px;width:120px;color:#333}
+.pf input:focus{outline:none;border-color:#5c6bc0}
+.gem-note{font-size:11px;color:#bf360c;background:#fff8f0;border-radius:6px;padding:6px 10px;border:1px solid #ffccbc;flex:1;min-width:260px}
+
+/* ── Totals */
+.totals{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.chip{background:#fff;border-radius:8px;padding:8px 14px;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+.chip-label{font-size:10px;color:#aaa;margin-bottom:2px;font-weight:500}
+.chip-val{font-size:15px;font-weight:800;color:#222}
+.chip-val.sm{font-size:13px}
+
+/* ── Section */
+.section{margin-bottom:20px}
+.section-title{font-size:.82rem;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px;display:flex;align-items:center;gap:6px}
+
+/* ── Model cards */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.card{background:#fff;border-radius:10px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.07);border-left:4px solid var(--c);position:relative}
+.card h3{font-size:.95rem;font-weight:800;color:#222;margin-bottom:10px}
+.bdg{display:inline-block;font-size:10px;padding:2px 7px;border-radius:8px;margin-left:6px;vertical-align:middle;background:#fff9c4;color:#e65100;font-weight:700}
+.row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #f5f5f5;font-size:13px}
+.row:last-child{border-bottom:none}
+.row-label{color:#888}
+.row-val{font-weight:700}
+
+/* ── Bar charts */
+.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:0}
+.chart-card{background:#fff;border-radius:10px;padding:14px 16px;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+.chart-card h4{font-size:12px;font-weight:700;color:#666;margin-bottom:10px}
+.bar-row{margin:5px 0}
+.bar-meta{display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;color:#555}
+.bar-track{background:#f0f0f0;border-radius:4px;height:8px;overflow:hidden}
+.bar-fill{height:100%;border-radius:4px;transition:width .4s}
+
+/* ── Sub-tabs (Per-Recording) */
+.subtabs{display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap}
+.stab{padding:5px 14px;border-radius:16px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:#eeeeee;color:#666;transition:all .12s}
+.stab:hover{background:#c5cae9;color:#1a237e}
+.stab.active{background:#1a237e;color:#fff}
+.stab-pane{display:none}
+.stab-pane.active{display:block}
+
+/* ── Tables */
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{background:#fafafa;padding:8px 10px;text-align:left;font-weight:700;color:#666;border-bottom:2px solid #eeeeee;white-space:nowrap;font-size:12px;text-transform:uppercase;letter-spacing:.3px}
+td{padding:7px 10px;border-bottom:1px solid #f5f5f5;vertical-align:top}
+tr:hover td{background:#fafafe}
+.sc{font-weight:700;font-size:13px}
+.sc.best{color:#2e7d32}
+.sc.worst{color:#c62828}
+.rname{font-weight:600}
+.dur{color:#bbb;font-size:12px;white-space:nowrap}
+
+/* ── Diff cells */
+.diff-cell{cursor:pointer;color:#999;font-size:12px;user-select:none;padding:2px 0;line-height:1.7}
+.diff-cell.open{color:#222;white-space:pre-wrap;word-break:break-word;font-size:13px}
+.ddel{background:#ffebee;color:#c62828;font-weight:800;text-decoration:line-through;text-decoration-color:#ef5350;border-radius:3px;padding:0 4px;border:1px solid #ffcdd2}
+.dins{background:#fff3e0;color:#bf360c;font-weight:800;border-radius:3px;padding:0 4px;border:1px solid #ffe0b2}
+
+/* ── Section card wrapper */
+.sec{background:#fff;border-radius:10px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.07)}
+
+/* ── Rec box */
+#recBox{background:#fff;border-radius:10px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.07);border-left:4px solid #fdd835;margin-bottom:16px}
+#recBox h2{font-size:.95rem;font-weight:800;margin-bottom:8px;color:#222}
+.rgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:10px}
+.rc{background:#f8f9ff;border-radius:8px;padding:10px;border:1px solid #e8eaf6}
+.rc h4{font-size:10px;color:#aaa;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px}
+.rc p{font-size:14px;font-weight:800;color:#1a237e;margin-bottom:2px}
+.rc .sub{font-size:11px;color:#bbb}
+</style>
+</head>
+<body>
+
+<!-- UPLOAD -->
+<div id="uploadZone">
+  <div class="drop-area" id="dropArea">
+    <h2>🎙️ Armenian Transcription Comparator</h2>
+    <p>Drop your Notion CSV export here, or click to browse</p>
+    <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">📂 Choose CSV File</button>
+    <input type="file" id="fileInput" accept=".csv">
+    <div id="progress"><div id="progress-bar"></div></div>
+    <p id="prog-label" style="font-size:12px;color:#bbb;margin-top:8px"></p>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" style="display:none">
+  <!-- Dark header -->
+  <div class="app-header">
+    <div class="app-header-left">
+      <h1>🎙️ Armenian Transcription Model Comparator</h1>
+      <div class="sub">WER · CER — Hispeech · Talk2Edit · Gemini Flash</div>
+    </div>
+    <div class="app-header-right">
+      <button class="btn btn-light" onclick="resetUpload()">↩ New File</button>
+      <button class="btn btn-white" onclick="downloadReport()">📥 Download Report</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- Pricing -->
+    <div class="pbar">
+      <span class="pbar-title">💰 Pricing</span>
+      <div class="pf">
+        <label>Hispeech / min (AMD)</label>
+        <input type="number" id="p-his" value="0" min="0" step="0.1" oninput="recalc()">
+      </div>
+      <div class="pf">
+        <label>Talk2Edit / min (AMD)</label>
+        <input type="number" id="p-tal" value="10" min="0" step="0.1" oninput="recalc()">
+      </div>
+      <div class="pf">
+        <label>AMD / USD Rate</label>
+        <input type="number" id="amd-rate" value="400" min="1" step="1" oninput="recalc();document.getElementById('rdisp').textContent=this.value">
+      </div>
+      <div class="gem-note">
+        <strong>Gemini 3 Flash:</strong> Input $1.50/1M tokens × (duration × 25 tok/s) + Output $9.00/1M tokens × (word count × 1.5 tok/word) × <span id="rdisp">400</span> AMD/USD
+      </div>
+    </div>
+
+    <!-- Totals -->
+    <div id="totals" class="totals"></div>
+
+    <!-- Recommendation -->
+    <div id="recBox"></div>
+
+    <!-- Model Overview -->
+    <div class="section">
+      <div class="section-title">📊 Model Overview</div>
+      <div id="cards" class="cards"></div>
+    </div>
+
+    <!-- Charts -->
+    <div class="section">
+      <div class="section-title">📈 Averages</div>
+      <div class="charts" id="charts">
+        <div id="ch-wer" class="chart-card"></div>
+        <div id="ch-cer" class="chart-card"></div>
+        <div id="ch-cost" class="chart-card"></div>
+      </div>
+    </div>
+
+    <!-- Per-Recording Results -->
+    <div class="section">
+      <div class="section-title">📋 Per-Recording Results</div>
+      <div class="sec">
+        <div class="subtabs">
+          <button class="stab active" onclick="switchSub('all',this)">All Recordings</button>
+          <button class="stab" onclick="switchSub('his',this)">Hispeech Diff</button>
+          <button class="stab" onclick="switchSub('tal',this)">Talk2Edit Diff</button>
+          <button class="stab" onclick="switchSub('gem',this)">Gemini Diff</button>
+        </div>
+        <div id="stab-all" class="stab-pane active"><div style="overflow-x:auto"><table id="t-all"></table></div></div>
+        <div id="stab-his" class="stab-pane">
+          <p style="font-size:12px;color:#aaa;margin-bottom:8px">Click any row to expand diff &nbsp;·&nbsp; <span class="ddel">red</span> = model missed &nbsp;·&nbsp; <span class="dins">orange</span> = model added</p>
+          <div style="overflow-x:auto"><table id="t-his"></table></div>
+        </div>
+        <div id="stab-tal" class="stab-pane">
+          <p style="font-size:12px;color:#aaa;margin-bottom:8px">Click any row to expand diff.</p>
+          <div style="overflow-x:auto"><table id="t-tal"></table></div>
+        </div>
+        <div id="stab-gem" class="stab-pane">
+          <p style="font-size:12px;color:#aaa;margin-bottom:8px">Click any row to expand diff.</p>
+          <div style="overflow-x:auto"><table id="t-gem"></table></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cost -->
+    <div class="section">
+      <div class="section-title">💰 Cost Breakdown</div>
+      <div class="sec">
+        <p style="font-size:12px;color:#aaa;margin-bottom:10px">Hover Gemini cells for token breakdown. Green = cheapest in row.</p>
+        <div style="overflow-x:auto"><table id="t-cost"></table></div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /app -->
+
+<script>
+const MODELS=[
+  {key:'hispeech',  label:'Hispeech',        color:'#5c6bc0'},
+  {key:'talk2edit', label:'Talk2Edit',        color:'#00897b'},
+  {key:'gemini',    label:'Gemini Flash',     color:'#e65100'},
+];
+const GEM_IN_USD=1.50, GEM_OUT_USD=9.00, GEM_TOK_S=25, GEM_TOK_W=1.5;
+const WER_CAP=600, CER_CAP=1000, DIFF_CAP=400;
+let G=[];
+
+function switchSub(name,btn){
+  document.querySelectorAll('.stab-pane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.stab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('stab-'+name).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ── Text utils
+function stripOG(t){
+  return t.replace(/^(Done|In Progress|Not Started|Completed|In Review)\s*\n/i,'')
+          .replace(/\[\d{1,2}:\d{2}(?::\d{2})?\]/g,'').trim();
+}
+function stripSpk(t){
+  return t.replace(/Speaker\s+\d+\s*\(\d{1,2}:\d{2}(?::\d{2})?-\d{1,2}:\d{2}(?::\d{2})?\)\s*/gi,'').trim();
+}
+function lastTs(raw){
+  const m=[...(raw||'').matchAll(/\[(\d{1,2}):(\d{2})\]/g)];
+  if(!m.length) return null;
+  const l=m[m.length-1]; return parseInt(l[1])*60+parseInt(l[2]);
+}
+function fmtS(s){ if(s==null) return '?'; return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); }
+function fmtT(s){ const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60; return (h?h+'h ':'')+m+'m '+sec+'s'; }
+const AP=/[։՞՛՜՝«»„""\.,!?;:(){}\[\]\/\\|@#$%^&*\-–—_+=<>`~''""]/g;
+function norm(t){ return (t||'').toLowerCase().replace(AP,' ').replace(/\s+/g,' ').trim(); }
+function tkW(t){ return norm(t).split(' ').filter(Boolean); }
+function tkC(t){ return norm(t).replace(/ /g,'').split(''); }
+function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function pct(v){ return v==null?'—':(v*100).toFixed(1)+'%'; }
+
+// ── Edit distance
+function ed(a,b){
+  const m=a.length,n=b.length;
+  let p=new Uint16Array(n+1),c=new Uint16Array(n+1);
+  for(let j=0;j<=n;j++) p[j]=j;
+  for(let i=1;i<=m;i++){
+    c[0]=i;
+    for(let j=1;j<=n;j++) c[j]=a[i-1]===b[j-1]?p[j-1]:1+Math.min(p[j-1],p[j],c[j-1]);
+    [p,c]=[c,p];
+  }
+  return p[n];
+}
+function calcWER(r,h){ const a=tkW(r).slice(0,WER_CAP),b=tkW(h).slice(0,WER_CAP); return a.length?Math.min(ed(a,b)/a.length,1):0; }
+function calcCER(r,h){ const a=tkC(r).slice(0,CER_CAP),b=tkC(h).slice(0,CER_CAP); return a.length?Math.min(ed(a,b)/a.length,1):0; }
+
+// ── Gemini cost
+function gemCalc(dur,txt){
+  if(dur==null) return null;
+  const rate=parseFloat(document.getElementById('amd-rate').value)||400;
+  const inTok=Math.round(dur*GEM_TOK_S);
+  const wc=(txt||'').trim().split(/\s+/).filter(Boolean).length;
+  const outTok=Math.round(wc*GEM_TOK_W);
+  const inUSD=inTok/1e6*GEM_IN_USD, outUSD=outTok/1e6*GEM_OUT_USD;
+  return {inTok,outTok,wc,tot:inTok+outTok,inUSD,outUSD,amd:+((inUSD+outUSD)*rate).toFixed(4)};
+}
+function getCost(m,r){
+  const rate=id=>parseFloat(document.getElementById(id).value)||0;
+  if(m.key==='hispeech')  return r.durSec!=null?+(rate('p-his')*(r.durSec/60)).toFixed(2):null;
+  if(m.key==='talk2edit') return r.durSec!=null?+(rate('p-tal')*(r.durSec/60)).toFixed(2):null;
+  if(m.key==='gemini'){ const g=gemCalc(r.durSec,r.gem); return g?g.amd:null; }
+  return null;
+}
+function fmtC(v){
+  if(v===null) return '<span style="color:#ddd">—</span>';
+  if(v===0)    return '<span style="color:#388e3c;font-weight:800">0 ֏</span>';
+  return v.toFixed(2)+' ֏';
+}
+
+// ── Diff ops
+function buildOps(ref,hyp){
+  const rw=tkW(ref).slice(0,DIFF_CAP),hw=tkW(hyp).slice(0,DIFF_CAP);
+  if(!rw.length&&!hw.length) return [];
+  const m=rw.length,n=hw.length;
+  const dp=Array.from({length:m+1},(_,i)=>{ const r=new Uint16Array(n+1); r[0]=i; if(!i) for(let j=1;j<=n;j++) r[j]=j; return r; });
+  for(let i=1;i<=m;i++) for(let j=1;j<=n;j++)
+    dp[i][j]=rw[i-1]===hw[j-1]?dp[i-1][j-1]:1+Math.min(dp[i-1][j-1],dp[i-1][j],dp[i][j-1]);
+  const ops=[]; let i=m,j=n;
+  while(i>0||j>0){
+    if(i>0&&j>0&&rw[i-1]===hw[j-1]){ops.unshift({t:'eq',r:rw[i-1],h:hw[j-1]});i--;j--;}
+    else if(i>0&&j>0&&dp[i][j]===dp[i-1][j-1]+1){ops.unshift({t:'sub',r:rw[i-1],h:hw[j-1]});i--;j--;}
+    else if(i>0&&dp[i][j]===dp[i-1][j]+1){ops.unshift({t:'del',r:rw[i-1]});i--;}
+    else{ops.unshift({t:'ins',h:hw[j-1]});j--;}
+  }
+  return ops;
+}
+function opsHTML(ops){
+  if(!ops.length) return '<em style="color:#ccc">empty</em>';
+  return ops.map(o=>{
+    if(o.t==='eq')  return esc(o.r);
+    if(o.t==='del') return `<span class="ddel">${esc(o.r)}</span>`;
+    if(o.t==='ins') return `<span class="dins">${esc(o.h)}</span>`;
+    return `<span class="ddel">${esc(o.r)}</span><span class="dins">${esc(o.h)}</span>`;
+  }).join(' ');
+}
+function opsMD(ops){
+  if(!ops.length) return '*(empty)*';
+  return ops.map(o=>{
+    if(o.t==='eq')  return o.r;
+    if(o.t==='del') return `~~${o.r}~~`;
+    if(o.t==='ins') return `**${o.h}**`;
+    return `~~${o.r}~~ **${o.h}**`;
+  }).join(' ');
+}
+function expandDiff(el){
+  if(!el.dataset.computed){
+    el.innerHTML='⏳ Computing…';
+    setTimeout(()=>{ el.innerHTML=opsHTML(buildOps(el.dataset.ref,el.dataset.hyp)); el.dataset.computed='1'; el.classList.add('open'); },10);
+  } else el.classList.toggle('open');
+}
+
+// ── CSV parser
+function parseCSV(text){
+  const rows=[]; let cur=[],f='',inQ=false;
+  text=text.replace(/^﻿/,'');
+  for(let i=0;i<text.length;i++){
+    const c=text[i],nx=text[i+1];
+    if(inQ){if(c==='"'&&nx==='"'){f+='"';i++;}else if(c==='"')inQ=false;else f+=c;}
+    else{if(c==='"')inQ=true;else if(c===','){cur.push(f);f='';}
+    else if(c==='\n'){cur.push(f);rows.push(cur);cur=[];f='';}
+    else if(c!=='\r')f+=c;}
+  }
+  if(f||cur.length){cur.push(f);rows.push(cur);}
+  return rows;
+}
+
+// ── Process
+function processCSV(text){
+  document.getElementById('progress').style.display='block';
+  const rows=parseCSV(text);
+  if(rows.length<2){alert('No data found');return;}
+  const hdr=rows[0].map(h=>h.replace(/^﻿/,'').toLowerCase().trim());
+  const ix=k=>hdr.findIndex(h=>h.includes(k));
+  const ni=ix('name'),oi=ix('og text'),hi=ix('hispeech'),ti=ix('talk2edit'),gi=ix('gemini');
+  if([ni,oi,hi,ti,gi].some(x=>x<0)){alert('Missing columns. Need: Name, OG TEXT, Hispeech, Talk2Edit, Gemini');return;}
+  const data=rows.slice(1).filter(r=>r&&r.some(c=>c.trim()));
+  G=[];let i=0;
+  function next(){
+    if(i>=data.length){
+      document.getElementById('progress').style.display='none';
+      document.getElementById('uploadZone').style.display='none';
+      document.getElementById('app').style.display='block';
+      renderAll(); return;
+    }
+    document.getElementById('progress-bar').style.width=Math.round(i/data.length*100)+'%';
+    document.getElementById('prog-label').textContent=`Processing ${i+1} / ${data.length}…`;
+    const row=data[i], name=(row[ni]||'').trim()||`Recording ${i+1}`;
+    const ogRaw=row[oi]||'', og=stripOG(ogRaw);
+    const his=(row[hi]||'').trim(), tal=stripSpk((row[ti]||'').trim()), gem=(row[gi]||'').trim();
+    G.push({name,og,his,tal,gem,durSec:lastTs(ogRaw),
+      hispeech:{wer:calcWER(og,his),cer:calcCER(og,his)},
+      talk2edit:{wer:calcWER(og,tal),cer:calcCER(og,tal)},
+      gemini:  {wer:calcWER(og,gem),cer:calcCER(og,gem)},
+    });
+    i++; setTimeout(next,0);
+  }
+  next();
+}
+
+// ── Render
+function renderAll(){
+  const n=G.length;
+  const stats=MODELS.map(m=>({...m,
+    avgWER:G.reduce((s,r)=>s+r[m.key].wer,0)/n,
+    avgCER:G.reduce((s,r)=>s+r[m.key].cer,0)/n,
+    total: G.reduce((s,r)=>{const c=getCost(m,r);return s+(c||0);},0),
+  }));
+  window._stats=stats;
+  const totalDur=G.reduce((s,r)=>s+(r.durSec||0),0);
+  const bWER=Math.min(...stats.map(s=>s.avgWER));
+  const validC=stats.filter(s=>s.total>0);
+  const bCost=validC.length?Math.min(...validC.map(s=>s.total)):null;
+
+  // Totals bar
+  document.getElementById('totals').innerHTML=
+    `<div class="chip"><div class="chip-label">Total Audio</div><div class="chip-val">${fmtT(totalDur)}</div></div>`+
+    stats.map(m=>`<div class="chip"><div class="chip-label">${m.label} Total Cost</div><div class="chip-val sm" style="color:${m.color}">${m.total.toFixed(2)} ֏</div></div>`).join('');
+
+  // Cards
+  document.getElementById('cards').innerHTML=stats.map(s=>`
+    <div class="card" style="--c:${s.color}">
+      <h3>${s.label}${s.avgWER===bWER?'<span class="bdg">🏆 Best WER</span>':''}</h3>
+      <div class="row"><span class="row-label">Avg Word Error Rate</span><span class="row-val" style="color:${s.avgWER<=.2?s.color:'#c62828'}">${pct(s.avgWER)}</span></div>
+      <div class="row"><span class="row-label">Avg Char Error Rate</span><span class="row-val" style="color:${s.avgCER<=.15?s.color:'#c62828'}">${pct(s.avgCER)}</span></div>
+      <div class="row"><span class="row-label">Total Cost</span><span class="row-val" style="color:${s.color}">${s.total.toFixed(2)} ֏</span></div>
+      <div class="row"><span class="row-label">Recordings</span><span class="row-val">${n}</span></div>
+    </div>`).join('');
+
+  // Charts
+  const mW=Math.max(...stats.map(s=>s.avgWER))||1;
+  const mC=Math.max(...stats.map(s=>s.avgCER))||1;
+  const mCo=Math.max(...stats.map(s=>s.total))||1;
+  document.getElementById('ch-wer').innerHTML=`<h4>Average Word Error Rate (lower = better)</h4>`+stats.map(s=>`<div class="bar-row"><div class="bar-meta"><span>${s.label}</span><span>${pct(s.avgWER)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${(s.avgWER/mW*100).toFixed(1)}%;background:${s.color}"></div></div></div>`).join('');
+  document.getElementById('ch-cer').innerHTML=`<h4>Average Character Error Rate (lower = better)</h4>`+stats.map(s=>`<div class="bar-row"><div class="bar-meta"><span>${s.label}</span><span>${pct(s.avgCER)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${(s.avgCER/mC*100).toFixed(1)}%;background:${s.color}"></div></div></div>`).join('');
+  document.getElementById('ch-cost').innerHTML=`<h4>Total Cost AMD (lower = better)</h4>`+stats.map(s=>`<div class="bar-row"><div class="bar-meta"><span>${s.label}</span><span>${s.total.toFixed(2)} ֏</span></div><div class="bar-track"><div class="bar-fill" style="width:${(s.total/mCo*100).toFixed(1)}%;background:${s.color}"></div></div></div>`).join('');
+
+  renderRec(stats,totalDur);
+  renderAllTable();
+  renderDiff('his','hispeech');
+  renderDiff('tal','talk2edit');
+  renderDiff('gem','gemini');
+  renderCost();
+}
+function recalc(){ if(G.length) renderAll(); }
+
+// ── Recommendation
+function renderRec(stats,totalDur){
+  const byW=[...stats].sort((a,b)=>a.avgWER-b.avgWER);
+  const byC=[...stats].sort((a,b)=>a.total-b.total);
+  const mCo=Math.max(...stats.map(s=>s.total))||1;
+  const valS=[...stats].map(s=>({...s,vs:(1-s.avgWER)*.6+(1-s.avgCER)*.4-(s.total/mCo)*.15})).sort((a,b)=>b.vs-a.vs);
+  const gap=((byW[1].avgWER-byW[0].avgWER)*100).toFixed(1);
+  const gemS=stats.find(s=>s.key==='gemini');
+  let v=`<strong>${byW[0].label}</strong> leads on accuracy — ${pct(byW[0].avgWER)} WER vs ${pct(byW[1].avgWER)} (${gap}pp gap). `;
+  v+=`Gemini total for ${fmtT(totalDur)}: <strong>${gemS.total.toFixed(2)} ֏</strong>. `;
+  v+=byC[0].key!==byW[0].key
+    ?`Budget pick: <strong>${byC[0].label}</strong> (${byC[0].total.toFixed(2)} ֏). Best accuracy: <strong>${byW[0].label}</strong>.`
+    :`<strong>${byW[0].label}</strong> is both most accurate and most cost-effective.`;
+  document.getElementById('recBox').innerHTML=`<h2>🏆 Final Recommendation</h2>
+    <p style="font-size:13px;color:#555;line-height:1.6;margin:6px 0 10px">${v}</p>
+    <div class="rgrid">
+      <div class="rc"><h4>Best Accuracy</h4><p>${byW[0].label}</p><div class="sub">WER ${pct(byW[0].avgWER)} · CER ${pct(byW[0].avgCER)}</div></div>
+      <div class="rc"><h4>Best Value</h4><p>${valS[0].label}</p><div class="sub">Score ${valS[0].vs.toFixed(3)}</div></div>
+      <div class="rc"><h4>Lowest Cost</h4><p>${byC[0].label}</p><div class="sub">${byC[0].total.toFixed(2)} ֏ total</div></div>
+      <div class="rc"><h4>Short Calls</h4><p>Talk2Edit</p><div class="sub">10 AMD/min</div></div>
+      <div class="rc"><h4>At Scale</h4><p>Gemini Flash</p><div class="sub">Token-based</div></div>
+    </div>`;
+}
+
+// ── All recordings table
+function renderAllTable(){
+  const rows=G.map((r,i)=>{
+    const ws=MODELS.map(m=>r[m.key].wer), cs=MODELS.map(m=>r[m.key].cer);
+    const mW=Math.min(...ws),xW=Math.max(...ws),mC=Math.min(...cs);
+    return `<tr><td>${i+1}</td><td class="rname">${esc(r.name)}</td><td class="dur">${fmtS(r.durSec)}</td>`+
+      MODELS.map((m,mi)=>`<td><span class="sc${ws[mi]===mW?' best':ws[mi]===xW&&mW!==xW?' worst':''}">${pct(ws[mi])}</span></td>`).join('')+
+      MODELS.map((m,mi)=>`<td><span class="sc${cs[mi]===mC?' best':''}">${pct(cs[mi])}</span></td>`).join('')+
+      `</tr>`;
+  }).join('');
+  document.getElementById('t-all').innerHTML=`<thead><tr><th>#</th><th>Recording</th><th>Dur</th>${MODELS.map(m=>`<th>${m.label} WER</th>`).join('')}${MODELS.map(m=>`<th>${m.label} CER*</th>`).join('')}</tr></thead><tbody>${rows}</tbody>`;
+}
+
+// ── Diff table
+function renderDiff(tid,key){
+  const rows=G.map((r,i)=>{
+    const txt=key==='hispeech'?r.his:key==='talk2edit'?r.tal:r.gem;
+    return `<tr><td>${i+1}</td><td class="rname">${esc(r.name)}</td><td class="dur">${fmtS(r.durSec)}</td>
+      <td><span class="sc${r[key].wer<=.15?' best':r[key].wer>=.5?' worst':''}">${pct(r[key].wer)}</span></td>
+      <td><span class="sc${r[key].cer<=.15?' best':r[key].cer>=.5?' worst':''}">${pct(r[key].cer)}</span></td>
+      <td><div class="diff-cell" data-ref="${esc(r.og)}" data-hyp="${esc(txt)}" onclick="expandDiff(this)">▼ click to expand</div></td></tr>`;
+  }).join('');
+  document.getElementById('t-'+tid).innerHTML=`<thead><tr><th>#</th><th>Recording</th><th>Dur</th><th>WER</th><th>CER*</th><th>Diff vs OG Text</th></tr></thead><tbody>${rows}</tbody>`;
+}
+
+// ── Cost table
+function renderCost(){
+  const rows=G.map((r,i)=>{
+    const costs=MODELS.map(m=>getCost(m,r));
+    const valid=costs.filter(c=>c!=null&&c>0), minC=valid.length?Math.min(...valid):null;
+    return `<tr><td>${i+1}</td><td class="rname">${esc(r.name)}</td><td class="dur">${fmtS(r.durSec)}</td>`+
+      MODELS.map((m,mi)=>{
+        const c=costs[mi], best=c!=null&&c>0&&c===minC;
+        if(m.key==='gemini'){
+          const gc=gemCalc(r.durSec,r.gem);
+          const tip=gc?`title="▸ Input: ${gc.inTok.toLocaleString()} tok (${fmtS(r.durSec)} × 25 tok/s) = $${gc.inUSD.toFixed(6)}\n▸ Output: ${gc.wc} words × 1.5 = ${gc.outTok.toLocaleString()} tok = $${gc.outUSD.toFixed(6)}\n▸ Total: ${gc.tot.toLocaleString()} tokens"`:'' ;
+          return `<td class="${best?'sc best':''}" ${tip} style="cursor:${gc?'help':'auto'}">${fmtC(c)}${gc?`<br><small style="color:#bbb;font-size:10px">${gc.inTok.toLocaleString()}+${gc.outTok.toLocaleString()} tok</small>`:''}`;
+        }
+        return `<td${best?' class="sc best"':''}>${fmtC(c)}</td>`;
+      }).join('')+`</tr>`;
+  }).join('');
+  const tots=MODELS.map(m=>{
+    const t=G.reduce((s,r)=>{const c=getCost(m,r);return s+(c||0);},0);
+    if(m.key==='gemini'){
+      const tk=G.reduce((s,r)=>{const g=gemCalc(r.durSec,r.gem);return s+(g?g.tot:0);},0);
+      return `<td style="font-weight:800;border-top:2px solid #eee">${t.toFixed(2)} ֏<br><small style="color:#bbb;font-size:10px">${tk.toLocaleString()} tok</small></td>`;
+    }
+    return `<td style="font-weight:800;border-top:2px solid #eee">${t.toFixed(2)} ֏</td>`;
+  }).join('');
+  document.getElementById('t-cost').innerHTML=`<thead><tr><th>#</th><th>Recording</th><th>Duration</th>${MODELS.map(m=>`<th>${m.label}${m.key==='gemini'?' (tokens)':''}</th>`).join('')}</tr></thead><tbody>${rows}<tr><td colspan="3" style="text-align:right;font-weight:800;border-top:2px solid #eee">TOTAL</td>${tots}</tr></tbody>`;
+}
+
+// ── Markdown report (detailed)
+function downloadReport(){
+  if(!G.length) return;
+  const stats=window._stats, n=G.length;
+  const date=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
+  const byW=[...stats].sort((a,b)=>a.avgWER-b.avgWER);
+  const byC=[...stats].sort((a,b)=>a.total-b.total);
+  const mCo=Math.max(...stats.map(s=>s.total))||1;
+  const valS=[...stats].map(s=>({...s,vs:(1-s.avgWER)*.6+(1-s.avgCER)*.4-(s.total/mCo)*.15})).sort((a,b)=>b.vs-a.vs);
+  const totalDur=G.reduce((s,r)=>s+(r.durSec||0),0);
+  const rate=parseFloat(document.getElementById('amd-rate').value)||400;
+  const ME={hispeech:'🔵',talk2edit:'🟢',gemini:'🟠'};
+  const wb=w=>w<=.10?'🟢':w<=.25?'🟡':w<=.50?'🟠':'🔴';
+  const wLabel=w=>w<=.10?'Excellent':w<=.20?'Good':w<=.35?'Moderate':w<=.50?'Poor':'Very Poor';
+
+  // Diff for markdown: ~~del~~ = missed word, <mark>ins</mark> = hallucinated word
+  function opsMDNotion(ops){
+    if(!ops.length) return '*(empty)*';
+    return ops.map(o=>{
+      if(o.t==='eq')  return o.r;
+      if(o.t==='del') return `~~${o.r}~~`;
+      if(o.t==='ins') return `<mark>${o.h}</mark>`;
+      return `~~${o.r}~~ <mark>${o.h}</mark>`;
+    }).join(' ');
+  }
+  function diffMd(ref,hyp){
+    if(!ref&&!hyp) return '*(both empty — no data)*';
+    if(!ref) return '*(no ground truth available for this recording)*';
+    if(!hyp||!hyp.trim()) return '*(no transcription returned by this model)*';
+    return opsMDNotion(buildOps(ref,hyp));
+  }
+
+  // Helpers
+  const tH=G.reduce((s,r)=>{const c=getCost({key:'hispeech'},r);return s+(c||0);},0);
+  const tT=G.reduce((s,r)=>{const c=getCost({key:'talk2edit'},r);return s+(c||0);},0);
+  const tG=G.reduce((s,r)=>{const gc=gemCalc(r.durSec,r.gem);return s+(gc?gc.amd:0);},0);
+  const tTok=G.reduce((s,r)=>{const gc=gemCalc(r.durSec,r.gem);return s+(gc?gc.tot:0);},0);
+  const gap=((byW[1].avgWER-byW[0].avgWER)*100).toFixed(1);
+  const hisS=stats.find(s=>s.key==='hispeech');
+  const talS=stats.find(s=>s.key==='talk2edit');
+  const gemS=stats.find(s=>s.key==='gemini');
+
+  let md='';
+
+  // ════════════════════════════════════════════════════════════
+  // COVER
+  // ════════════════════════════════════════════════════════════
+  md+=`# 🎙️ Armenian Speech-to-Text Model Evaluation Report\n\n`;
+  md+=`> **Prepared by:** reArm ACADEMY QA Team\n`;
+  md+=`> **Date:** ${date}\n`;
+  md+=`> **Total Recordings Evaluated:** ${n}\n`;
+  md+=`> **Total Audio Duration:** ${fmtT(totalDur)}\n`;
+  md+=`> **Models Evaluated:** Hispeech · Talk2Edit (Prod) · Gemini 3 Flash\n`;
+  md+=`> **Exchange Rate Used:** ${rate} AMD / 1 USD\n\n`;
+  md+=`---\n\n`;
+
+  // ════════════════════════════════════════════════════════════
+  // TABLE OF CONTENTS
+  // ════════════════════════════════════════════════════════════
+  md+=`## 📑 Table of Contents\n\n`;
+  md+=`1. [Executive Summary](#executive-summary)\n`;
+  md+=`2. [Methodology & How Metrics Work](#methodology)\n`;
+  md+=`3. [Overall Results at a Glance](#overall-results)\n`;
+  md+=`4. [Model-by-Model Analysis](#model-analysis)\n`;
+  md+=`5. [Cost Analysis & Projections](#cost-analysis)\n`;
+  md+=`6. [Final Recommendations](#recommendations)\n`;
+  md+=`7. [Per-Recording Detailed Transcriptions](#per-recording)\n`;
+  md+=`8. [Glossary of Terms](#glossary)\n\n`;
+  md+=`---\n\n`;
+
+  // ════════════════════════════════════════════════════════════
+  // 1. EXECUTIVE SUMMARY
+  // ════════════════════════════════════════════════════════════
+  md+=`## 1. 📊 Executive Summary\n\n`;
+  md+=`This report presents the results of a systematic evaluation of three Armenian speech-to-text (STT) transcription models: **Hispeech**, **Talk2Edit (Prod)**, and **Gemini 3 Flash**. The evaluation was conducted using ${n} real call recordings with a combined duration of **${fmtT(totalDur)}**. Each model's output was compared against a manually verified ground-truth transcript (OG Text), and scored on two primary accuracy metrics: Word Error Rate (WER) and Character Error Rate (CER).\n\n`;
+  md+=`### Key Findings at a Glance\n\n`;
+  md+=`| Model | Avg WER | Avg CER | Total Cost (${n} recordings) | Performance Grade |\n`;
+  md+=`|-------|:-------:|:-------:|:----------------------------:|:-----------------:|\n`;
+  stats.forEach(s=>{
+    md+=`| ${ME[s.key]} **${s.label}** | ${wb(s.avgWER)} ${pct(s.avgWER)} | ${wb(s.avgCER)} ${pct(s.avgCER)} | **${s.total.toFixed(2)} AMD** | ${wLabel(s.avgWER)} |\n`;
+  });
+  md+=`\n`;
+  md+=`> 📌 *WER = Word Error Rate. CER = Character Error Rate. Lower values = better accuracy. See Section 2 for full explanation.*\n\n`;
+  md+=`### Summary Narrative\n\n`;
+  md+=`**${byW[0].label}** delivered the highest transcription accuracy with an average WER of **${pct(byW[0].avgWER)}**, outperforming **${byW[1].label}** by ${gap} percentage points. `;
+  md+=`**${byC[0].label}** also led on character-level accuracy (CER: ${pct(byC[0].avgCER)}), which is particularly meaningful for Armenian given its agglutinative morphology.\n\n`;
+  md+=`From a cost perspective, **${byC[0].label}** is the most affordable option at **${byC[0].total.toFixed(2)} AMD** for the full ${n}-recording dataset. `;
+  md+=`The cost-vs-accuracy sweet spot belongs to **${valS[0].label}**, which balances both dimensions most effectively.\n\n`;
+  md+=`---\n\n`;
+
+  // ════════════════════════════════════════════════════════════
+  // 2. METHODOLOGY
+  // ════════════════════════════════════════════════════════════
+  md+=`## 2. 🔬 Methodology & How Metrics Work\n\n`;
+
+  md+=`### 2.1 Test Data\n\n`;
+  md+=`All ${n} recordings are real customer-agent call audio files in Armenian. The ground-truth text (OG Text) for each recording was manually verified and is treated as 100% accurate. Each model's output is compared solely against this OG Text — the models are **not** compared against each other.\n\n`;
+  md+=`Before comparison, both the OG Text and model outputs are **normalized**: converted to lowercase, Armenian and standard punctuation removed, and whitespace collapsed. This ensures that differences in capitalization or punctuation do not artificially inflate error counts.\n\n`;
+
+  md+=`### 2.2 Word Error Rate (WER)\n\n`;
+  md+=`**WER** is the industry-standard metric for evaluating speech-to-text systems. It measures how many words were transcribed incorrectly relative to the total number of words in the reference.\n\n`;
+  md+=`**Formula:**\n\`\`\`\nWER = (Substitutions + Deletions + Insertions) / Total Words in Reference\n\`\`\`\n\n`;
+  md+=`- **Substitution** — model transcribed the wrong word (e.g., "բարև" → "բայց")\n`;
+  md+=`- **Deletion** — model missed a word that was in the original\n`;
+  md+=`- **Insertion** — model added a word that wasn't in the original\n\n`;
+  md+=`**Score interpretation:**\n`;
+  md+=`| WER Range | Grade | Meaning |\n|-----------|-------|---------|\n`;
+  md+=`| 0–10% | 🟢 Excellent | Near-perfect transcription, suitable for any use case |\n`;
+  md+=`| 10–25% | 🟡 Good | Minor errors, suitable for most use cases with light review |\n`;
+  md+=`| 25–50% | 🟠 Moderate | Noticeable errors, requires human review before use |\n`;
+  md+=`| 50%+ | 🔴 Poor | Significant errors, not reliable without full manual correction |\n\n`;
+  md+=`> ⚠️ *In this report, WER is computed on the first **${WER_CAP} words** of each recording to prevent browser performance issues with very long calls.*\n\n`;
+
+  md+=`### 2.3 Character Error Rate (CER)\n\n`;
+  md+=`**CER** is a finer-grained metric that operates at the character level rather than the word level. It is especially important for languages like Armenian, which is highly **agglutinative** — meaning words are formed by combining many morphemes (prefixes, suffixes, roots). A single "wrong word" in Armenian might share 80% of its characters with the correct word, making CER a better measure of how close the model actually got.\n\n`;
+  md+=`**Formula:**\n\`\`\`\nCER = Character-level edit distance / Total characters in reference\n\`\`\`\n\n`;
+  md+=`A model with low CER but higher WER is making mostly small character-level mistakes (e.g., confusing "ը" with "ի"), whereas a model with both high WER and high CER is making completely wrong transcriptions.\n\n`;
+  md+=`> ⚠️ *CER is computed on the first **${CER_CAP} characters** of each recording to maintain performance.*\n\n`;
+
+  md+=`### 2.4 Diff Visualization Explained\n\n`;
+  md+=`In Section 7, each transcription is shown as a **word-level diff** against the OG Text. The highlighting works as follows:\n\n`;
+  md+=`| Formatting | Meaning | Example |\n|------------|---------|---------------------------|\n`;
+  md+=`| ~~strikethrough~~ | **Omission error** — this word was in the OG Text but the model missed it entirely | ~~բարև~~ |\n`;
+  md+=`| <mark>yellow highlight</mark> | **Hallucination/insertion error** — the model transcribed this word but it does not appear in the OG Text | <mark>ալո</mark> |\n`;
+  md+=`| Normal text | **Correct** — word matches the OG Text | ձեզ |\n\n`;
+  md+=`When a model **substituted** one word for another (wrong word in the right place), you will see both: the ~~original~~ crossed out and the <mark>replacement</mark> highlighted.\n\n`;
+  md+=`---\n\n`;
+
+  // ════════════════════════════════════════════════════════════
+  // 3. OVERALL RESULTS
+  // ════════════════════════════════════════════════════════════
+  md+=`## 3. 📈 Overall Results at a Glance\n\n`;
+
+  md+=`### 3.1 Accuracy Rankings\n\n`;
+  md+=`| Rank | Model | Avg WER | Avg CER | Grade |\n|------|-------|:-------:|:-------:|-------|\n`;
+  byW.forEach((s,i)=>{ md+=`| #${i+1} | ${ME[s.key]} **${s.label}** | ${wb(s.avgWER)} **${pct(s.avgWER)}** | ${wb(s.avgCER)} ${pct(s.avgCER)} | ${wLabel(s.avgWER)} |\n`; });
+  md+=`\n`;
+
+  md+=`### 3.2 Per-Recording WER Overview\n\n`;
+  md+=`| # | Recording | Duration | 🔵 Hispeech WER | 🟢 Talk2Edit WER | 🟠 Gemini WER | Best Model |\n`;
+  md+=`|---|-----------|:--------:|:---------------:|:----------------:|:-------------:|------------|\n`;
+  G.forEach((r,i)=>{
+    const ws=MODELS.map(m=>r[m.key].wer), bi=ws.indexOf(Math.min(...ws));
+    md+=`| ${i+1} | ${r.name} | ${fmtS(r.durSec)} | ${wb(r.hispeech.wer)} ${pct(r.hispeech.wer)} | ${wb(r.talk2edit.wer)} ${pct(r.talk2edit.wer)} | ${wb(r.gemini.wer)} ${pct(r.gemini.wer)} | **${MODELS[bi].label}** |\n`;
+  });
+  md+=`\n`;
+
+  md+=`### 3.3 Per-Recording CER Overview\n\n`;
+  md+=`| # | Recording | Duration | 🔵 Hispeech CER | 🟢 Talk2Edit CER | 🟠 Gemini CER |\n`;
+  md+=`|---|-----------|:--------:|:---------------:|:----------------:|:-------------:|\n`;
+  G.forEach((r,i)=>{ md+=`| ${i+1} | ${r.name} | ${fmtS(r.durSec)} | ${wb(r.hispeech.cer)} ${pct(r.hispeech.cer)} | ${wb(r.talk2edit.cer)} ${pct(r.talk2edit.cer)} | ${wb(r.gemini.cer)} ${pct(r.gemini.cer)} |\n`; });
+  md+=`\n---\n\n`;
+
+  // ════════════════════════════════════════════════════════════
+  // 4. MODEL-BY-MODEL ANALYSIS
+  // ════════════════════════════════════════════════════════════
+  md+=`## 4. 🔍 Model-by-Model Analysis\n\n`;
+
+  const modelDesc={
+    hispeech:`Hispeech is a dedicated Armenian speech recognition service. It is specifically trained on Armenian language data, which gives it a structural advantage for Armenian phonology and vocabulary.`,
+    talk2edit:`Talk2Edit (Prod) is the production version of the Talk2Edit transcription platform. It includes speaker diarization (labeling who spoke when), which is stripped before accuracy measurement. It uses a per-minute pricing model.`,
+    gemini:`Gemini 3 Flash is Google's multimodal AI model with strong audio transcription capabilities. It is not specialized for Armenian but benefits from Google's large multilingual training dataset. It uses a token-based pricing model for both audio input and text output.`,
+  };
+
+  MODELS.forEach(m=>{
+    const s=stats.find(x=>x.key===m.key);
+    const recsBest=G.filter(r=>{ const ws=MODELS.map(x=>r[x.key].wer); return ws.indexOf(Math.min(...ws))===MODELS.indexOf(m); }).length;
+    const recsWorst=G.filter(r=>{ const ws=MODELS.map(x=>r[x.key].wer); return ws.indexOf(Math.max(...ws))===MODELS.indexOf(m); }).length;
+    const werVals=G.map(r=>r[m.key].wer).sort((a,b)=>a-b);
+    const medWER=werVals[Math.floor(werVals.length/2)];
+    md+=`### ${ME[m.key]} ${m.label}\n\n`;
+    md+=`${modelDesc[m.key]}\n\n`;
+    md+=`#### Accuracy Results\n\n`;
+    md+=`| Metric | Value | Grade |\n|--------|:-----:|-------|\n`;
+    md+=`| Average WER | **${pct(s.avgWER)}** | ${wb(s.avgWER)} ${wLabel(s.avgWER)} |\n`;
+    md+=`| Average CER | **${pct(s.avgCER)}** | ${wb(s.avgCER)} ${wLabel(s.avgCER)} |\n`;
+    md+=`| Median WER | **${pct(medWER)}** | — |\n`;
+    md+=`| Best result (lowest WER) | **${pct(Math.min(...G.map(r=>r[m.key].wer)))}** | — |\n`;
+    md+=`| Worst result (highest WER) | **${pct(Math.max(...G.map(r=>r[m.key].wer)))}** | — |\n`;
+    md+=`| Recordings where this model won | **${recsBest} / ${n}** | — |\n`;
+    md+=`| Recordings where this model was worst | **${recsWorst} / ${n}** | — |\n\n`;
+    md+=`#### Cost Summary\n\n`;
+    md+=`| Item | Value |\n|------|-------|\n`;
+    if(m.key==='gemini'){
+      const totTokThis=G.reduce((s,r)=>{const gc=gemCalc(r.durSec,r.gem);return s+(gc?gc.tot:0);},0);
+      const avgPerRec=s.total/n;
+      md+=`| Pricing model | Token-based ($${GEM_IN_USD}/1M input · $${GEM_OUT_USD}/1M output) |\n`;
+      md+=`| Total tokens used | ${totTokThis.toLocaleString()} tokens |\n`;
+      md+=`| Total cost for ${n} recordings | **${s.total.toFixed(3)} AMD** |\n`;
+      md+=`| Average cost per recording | ${avgPerRec.toFixed(3)} AMD |\n`;
+      md+=`| Average cost per minute of audio | ${(s.total/(totalDur/60)).toFixed(3)} AMD/min |\n`;
+    } else {
+      const perMin=parseFloat(document.getElementById(m.key==='hispeech'?'p-his':'p-tal').value)||0;
+      md+=`| Pricing model | ${perMin} AMD per minute |\n`;
+      md+=`| Total cost for ${n} recordings | **${s.total.toFixed(2)} AMD** |\n`;
+      md+=`| Average cost per recording | ${(s.total/n).toFixed(2)} AMD |\n`;
+      md+=`| Equivalent hourly rate | ${(perMin*60).toFixed(0)} AMD/hr |\n`;
+    }
+    md+=`\n`;
+  });
+  md+=`---\n\n`;
+
+  // ════════════════════════════════════════════════════════════
+  // 5. COST ANALYSIS
+  // ════════════════════════════════════════════════════════════
+  md+=`## 5. 💰 Cost Analysis & Projections\n\n`;
+
+  md+=`### 5.1 Pricing Models Explained\n\n`;
+  md+=`Each model uses a different pricing structure:\n\n`;
+  md+=`- **🔵 Hispeech** — Charged per minute of audio processed. Price is configurable.\n`;
+  md+=`- **🟢 Talk2Edit (Prod)** — Charged per minute of audio at a flat rate of **10 AMD/min** (600 AMD/hr). All recordings are charged regardless of length.\n`;
+  md+=`- **🟠 Gemini 3 Flash** — Token-based pricing. Charges separately for:\n`;
+  md+=`  - *Audio input tokens:* **$${GEM_IN_USD}/1M tokens** at ${GEM_TOK_S} tokens per second of audio\n`;
+  md+=`  - *Text output tokens:* **$${GEM_OUT_USD}/1M tokens** estimated at ${GEM_TOK_W} tokens per word of transcription\n`;
+  md+=`  - Converted to AMD at rate: ${rate} AMD/USD\n\n`;
+
+  md+=`### 5.2 Cost Breakdown Per Recording\n\n`;
+  md+=`| # | Recording | Duration | 🔵 Hispeech | 🟢 Talk2Edit | 🟠 Gemini In | 🟠 Gemini Out | 🟠 Gemini Total |\n`;
+  md+=`|---|-----------|:--------:|:-----------:|:------------:|:------------:|:-------------:|:---------------:|\n`;
+  G.forEach((r,i)=>{
+    const hc=getCost({key:'hispeech'},r),tc=getCost({key:'talk2edit'},r),gc=gemCalc(r.durSec,r.gem);
+    md+=`| ${i+1} | ${r.name} | ${fmtS(r.durSec)} | ${hc!=null?hc.toFixed(2)+' AMD':'—'} | ${tc!=null?tc.toFixed(2)+' AMD':'—'} | ${gc?gc.inTok.toLocaleString()+' tok':'—'} | ${gc?gc.outTok.toLocaleString()+' tok':'—'} | ${gc?gc.amd.toFixed(3)+' AMD':'—'} |\n`;
+  });
+  md+=`| | **TOTAL** | **${fmtT(totalDur)}** | **${tH.toFixed(2)} AMD** | **${tT.toFixed(2)} AMD** | | **${tTok.toLocaleString()} tok** | **${tG.toFixed(3)} AMD** |\n\n`;
+
+  md+=`### 5.3 Cost Efficiency (Accuracy per AMD)\n\n`;
+  md+=`To understand which model gives the best accuracy for the price, we calculate accuracy per AMD spent:\n\n`;
+  md+=`| Model | Total Cost | Avg Accuracy (1–WER) | Efficiency Score |\n|-------|:----------:|:--------------------:|:-----------------:|\n`;
+  stats.forEach(s=>{
+    const eff=s.total>0?((1-s.avgWER)/s.total*1000).toFixed(3):'∞ (no cost)';
+    md+=`| ${ME[s.key]} **${s.label}** | ${s.total.toFixed(2)} AMD | ${pct(1-s.avgWER)} | ${eff} |\n`;
+  });
+  md+=`\n> *Efficiency Score = (1 − WER) × 1000 / Total Cost. Higher is better. "∞" means zero cost (price not configured).*\n\n`;
+
+  md+=`### 5.4 Monthly Cost Projections\n\n`;
+  const avgDurPerRec=totalDur/n;
+  md+=`Based on the average recording duration of **${fmtS(Math.round(avgDurPerRec))} per recording**:\n\n`;
+  md+=`| Volume | 🔵 Hispeech | 🟢 Talk2Edit | 🟠 Gemini Flash |\n|--------|:-----------:|:------------:|:---------------:|\n`;
+  [100,500,1000,5000].forEach(vol=>{
+    const scale=vol/n;
+    md+=`| ${vol.toLocaleString()} recordings/month | ${(tH*scale).toFixed(0)} AMD | ${(tT*scale).toFixed(0)} AMD | ${(tG*scale).toFixed(0)} AMD |\n`;
+  });
+  md+=`\n---\n\n`;
+
+  // ════════════════════════════════════════════════════════════
+  // 6. RECOMMENDATIONS
+  // ════════════════════════════════════════════════════════════
+  md+=`## 6. 🏆 Final Recommendations\n\n`;
+  md+=`Based on the accuracy scores, cost analysis, and practical considerations for Armenian call center transcription:\n\n`;
+
+  md+=`### 6.1 Primary Recommendation\n\n`;
+  md+=`> **Use ${byW[0].label} as the primary transcription model.**\n\n`;
+  md+=`${byW[0].label} achieved the highest accuracy across the test set with **${pct(byW[0].avgWER)} WER** and **${pct(byW[0].avgCER)} CER**. The ${gap}pp accuracy advantage over the next-best model (${byW[1].label}) is meaningful in a production context where errors require manual review and correction.\n\n`;
+
+  md+=`### 6.2 Use-Case Decision Matrix\n\n`;
+  md+=`| Scenario | Recommended Model | Reason |\n|----------|:-----------------:|--------|\n`;
+  md+=`| Highest transcription accuracy needed | **${byW[0].label}** | Best WER: ${pct(byW[0].avgWER)} |\n`;
+  md+=`| Best accuracy-to-cost balance | **${valS[0].label}** | Value score: ${valS[0].vs.toFixed(3)} |\n`;
+  md+=`| Lowest per-recording cost | **${byC[0].label}** | ${byC[0].total.toFixed(2)} AMD total for ${n} recordings |\n`;
+  md+=`| Short calls (< 5 min) | **Talk2Edit Prod** | Flat 10 AMD/min, predictable costs |\n`;
+  md+=`| High-volume batch processing | **Gemini Flash** | Token-based scales efficiently, low unit cost |\n`;
+  md+=`| Speaker identification needed | **Talk2Edit Prod** | Has built-in diarization (Speaker 1/2 labels) |\n\n`;
+
+  md+=`### 6.3 What to Watch Out For\n\n`;
+  md+=`- **Gemini Flash** struggles more with Armenian-specific terms, proper nouns, and heavily accented speech. Its CER of ${pct(gemS.avgCER)} suggests character-level confusion even when words are recognizable.\n`;
+  md+=`- **Talk2Edit** produces speaker-labeled output (diarization), which is useful but requires stripping before any automated text processing.\n`;
+  md+=`- **WER values above 30%** (which all three models show on average) indicate that **none of these models should be used as-is without human review** for critical applications like legal, medical, or compliance transcription.\n`;
+  md+=`- For internal summaries, CRM notes, or search indexing, models with WER under 40% are generally acceptable.\n\n`;
+  md+=`---\n\n`;
+
+  // ════════════════════════════════════════════════════════════
+  // 7. PER-RECORDING DETAIL
+  // ════════════════════════════════════════════════════════════
+  md+=`## 7. 📋 Per-Recording Detailed Transcriptions\n\n`;
+  md+=`Each recording below is expandable. Inside you will find:\n`;
+  md+=`- The full accuracy metrics (WER and CER) for each model\n`;
+  md+=`- The cost breakdown for that specific recording\n`;
+  md+=`- The verified ground-truth text\n`;
+  md+=`- The full transcription from each model with **word-level error highlighting**\n\n`;
+
+  md+=`### 🎨 Highlighting Legend\n\n`;
+  md+=`| Format | Color in Notion | Meaning |\n|--------|:---------------:|---------|\n`;
+  md+=`| ~~strikethrough~~ | Strikethrough text | **Omission error** — this word was in the OG Text but the model failed to transcribe it |\n`;
+  md+=`| <mark>highlighted</mark> | Yellow highlight | **Hallucination / insertion error** — the model transcribed this word but it does not exist in the OG Text |\n`;
+  md+=`| Normal text | No formatting | **Correct** — the word matches the ground truth |\n\n`;
+  md+=`> ℹ️ *A substitution (wrong word) appears as both: ~~original word~~ crossed out AND the <mark>wrong replacement</mark> highlighted.*\n\n`;
+
+  G.forEach((r,i)=>{
+    const ws=MODELS.map(m=>r[m.key].wer), bi=ws.indexOf(Math.min(...ws));
+    const cs=MODELS.map(m=>r[m.key].cer), bci=cs.indexOf(Math.min(...cs));
+    const gc=gemCalc(r.durSec,r.gem);
+    const hc=getCost({key:'hispeech'},r), tc=getCost({key:'talk2edit'},r);
+
+    md+=`<details>\n<summary>\n\n`;
+    md+=`**${i+1}. ${r.name}** &nbsp;·&nbsp; ⏱️ ${fmtS(r.durSec)} &nbsp;·&nbsp; `;
+    md+=MODELS.map(m=>`${ME[m.key]} WER ${pct(r[m.key].wer)}`).join(' &nbsp;·&nbsp; ');
+    md+=` &nbsp;·&nbsp; 🏆 **${MODELS[bi].label}**\n\n</summary>\n\n`;
+
+    md+=`#### 📈 Accuracy Metrics\n\n`;
+    md+=`| Model | WER | Grade | CER | Grade |\n|-------|:---:|:-----:|:---:|:-----:|\n`;
+    MODELS.forEach(m=>{
+      md+=`| ${ME[m.key]} **${m.label}** | ${pct(r[m.key].wer)} | ${wb(r[m.key].wer)} ${wLabel(r[m.key].wer)} | ${pct(r[m.key].cer)} | ${wb(r[m.key].cer)} ${wLabel(r[m.key].cer)} |\n`;
+    });
+    md+=`\n`;
+    md+=`> 🏆 Best WER: **${MODELS[bi].label}** (${pct(ws[bi])}) · Best CER: **${MODELS[bci].label}** (${pct(cs[bci])})\n\n`;
+
+    md+=`#### 💰 Cost for This Recording\n\n`;
+    md+=`| Model | Cost | Breakdown |\n|-------|:----:|----------|\n`;
+    md+=`| 🔵 Hispeech | ${hc!=null?hc.toFixed(2)+' AMD':'—'} | ${r.durSec!=null?(r.durSec/60).toFixed(1)+' min × rate':'no duration'} |\n`;
+    md+=`| 🟢 Talk2Edit | ${tc!=null?tc.toFixed(2)+' AMD':'—'} | ${r.durSec!=null?(r.durSec/60).toFixed(1)+' min × 10 AMD/min':'no duration'} |\n`;
+    md+=`| 🟠 Gemini | ${gc?gc.amd.toFixed(3)+' AMD':'—'} | ${gc?gc.inTok.toLocaleString()+' input tok + '+gc.outTok.toLocaleString()+' output tok ('+gc.wc+' words)':'no data'} |\n\n`;
+
+    md+=`#### 📄 Ground Truth (OG Text)\n\n`;
+    md+=r.og.replace(/\n+/g,'\n').trim().split('\n').map(l=>`> ${l}`).join('\n')+'\n\n';
+
+    MODELS.forEach(m=>{
+      const txt=m.key==='hispeech'?r.his:m.key==='talk2edit'?r.tal:r.gem;
+      md+=`#### ${ME[m.key]} ${m.label} Transcription — WER ${pct(r[m.key].wer)} | CER ${pct(r[m.key].cer)}\n\n`;
+      md+=diffMd(r.og,txt)+'\n\n';
+    });
+
+    md+=`</details>\n\n`;
+  });
+
+  md+=`---\n\n`;
+
+  // ════════════════════════════════════════════════════════════
+  // 8. GLOSSARY
+  // ════════════════════════════════════════════════════════════
+  md+=`## 8. 📚 Glossary of Terms\n\n`;
+  md+=`| Term | Definition |\n|------|------------|\n`;
+  md+=`| **WER** (Word Error Rate) | The percentage of words transcribed incorrectly. Calculated as (substitutions + deletions + insertions) ÷ total reference words. Lower is better. |\n`;
+  md+=`| **CER** (Character Error Rate) | Same as WER but measured at the character level. Useful for agglutinative languages like Armenian where partial word matches are meaningful. |\n`;
+  md+=`| **Substitution** | The model transcribed a different word than what was spoken (e.g., "բայց" instead of "բարև"). Counted as 1 error. |\n`;
+  md+=`| **Deletion** | The model missed a word entirely — it was spoken but not transcribed. Counted as 1 error. |\n`;
+  md+=`| **Insertion** | The model transcribed a word that was never spoken — a hallucination. Counted as 1 error. |\n`;
+  md+=`| **OG Text** | The verified ground-truth transcript, manually reviewed. Treated as 100% correct for all comparisons. |\n`;
+  md+=`| **Diarization** | The process of labeling which speaker said what (e.g., "Speaker 1", "Speaker 2"). Talk2Edit provides this; it is stripped before metric calculation. |\n`;
+  md+=`| **Token** | The unit of text used by AI language models for billing. Roughly 1 token ≈ 1.5 Armenian words. Audio is also billed in tokens at 25 tokens/second. |\n`;
+  md+=`| **Audio Input Tokens** | Tokens charged for the audio file sent to Gemini. Rate: 25 tokens per second of audio. |\n`;
+  md+=`| **Output Tokens** | Tokens charged for the text Gemini returns (the transcription). Estimated at 1.5 tokens per output word. |\n`;
+  md+=`| **AMD** | Armenian Dram — the currency used for cost calculations in this report. |\n`;
+  md+=`| **Normalization** | Pre-processing applied to both OG Text and model output before comparison: lowercasing, removing punctuation, collapsing whitespace. |\n`;
+  md+=`| **Agglutinative language** | A language type where words are formed by combining multiple morphemes. Armenian is agglutinative, making CER especially informative. |\n\n`;
+
+  md+=`---\n\n`;
+  md+=`*This report was generated automatically by the Armenian Transcription Model Comparator tool.*\n`;
+  md+=`*Generated on: ${date} · Total audio analyzed: ${fmtT(totalDur)} · Exchange rate: ${rate} AMD/USD*\n`;
+
+  const blob=new Blob([md],{type:'text/markdown'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=`transcription-report-${new Date().toISOString().slice(0,10)}.md`; a.click();
+}
+
+// ── File input
+function handleFile(f){
+  if(!f||!f.name.endsWith('.csv')){alert('Please upload a .csv file');return;}
+  const r=new FileReader(); r.onload=e=>processCSV(e.target.result); r.readAsText(f,'UTF-8');
+}
+document.getElementById('fileInput').addEventListener('change',e=>{if(e.target.files[0])handleFile(e.target.files[0]);});
+const da=document.getElementById('dropArea');
+da.addEventListener('dragover',e=>{e.preventDefault();da.classList.add('over');});
+da.addEventListener('dragleave',()=>da.classList.remove('over'));
+da.addEventListener('drop',e=>{e.preventDefault();da.classList.remove('over');handleFile(e.dataTransfer.files[0]);});
+function resetUpload(){ document.getElementById('uploadZone').style.display=''; document.getElementById('app').style.display='none'; document.getElementById('fileInput').value=''; G=[]; }
+</script>
+</body>
+</html>
