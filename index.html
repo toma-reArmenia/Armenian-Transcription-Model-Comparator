@@ -12,10 +12,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .app-header-left .sub{font-size:11px;color:rgba(255,255,255,.65);letter-spacing:.3px}
 .app-header-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .btn{padding:7px 14px;border-radius:6px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:.15s}
-.btn-white{background:#fff;color:#1a237e}
-.btn-white:hover{background:#e8eaf6}
-.btn-outline{background:transparent;color:#fff;border:1.5px solid rgba(255,255,255,.5)}
-.btn-outline:hover{background:rgba(255,255,255,.1)}
+.btn-white{background:#fff;color:#1a237e}.btn-white:hover{background:#e8eaf6}
+.btn-outline{background:transparent;color:#fff;border:1.5px solid rgba(255,255,255,.5)}.btn-outline:hover{background:rgba(255,255,255,.1)}
 .rate-wrap{display:flex;align-items:center;gap:6px;color:rgba(255,255,255,.8);font-size:12px}
 .rate-wrap input{width:60px;padding:4px 6px;border-radius:5px;border:1.5px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;font-size:12px;text-align:center}
 .container{max-width:1200px;margin:0 auto;padding:20px}
@@ -25,59 +23,60 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .section-body{padding:20px}
 .upload-area{border:2px dashed #c5cae9;border-radius:10px;padding:40px;text-align:center;cursor:pointer;transition:.2s}
 .upload-area:hover{border-color:#3f51b5;background:#f8f9ff}
-.upload-area p{color:#666;margin-top:8px;font-size:13px}
-.upload-icon{font-size:2.5rem}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px}
 .card{background:#f8f9ff;border-radius:10px;padding:14px;text-align:center;border:1px solid #e8eaf6}
 .card .val{font-size:1.6rem;font-weight:800;color:#1a237e}
 .card .lbl{font-size:11px;color:#666;margin-top:3px;text-transform:uppercase;letter-spacing:.4px}
-.model-card{border-left:4px solid var(--mc)}
-.model-card .val{color:var(--mc)}
+.model-card{border-left:4px solid var(--mc)}.model-card .val{color:var(--mc)}
+
+/* ── Result table cells ── */
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{background:#f5f5f5;padding:9px 12px;text-align:left;font-weight:700;color:#333;border-bottom:2px solid #e0e0e0;white-space:nowrap}
-td{padding:8px 12px;border-bottom:1px solid #f0f0f0;vertical-align:top}
+td{padding:8px 12px;border-bottom:1px solid #f0f0f0;vertical-align:middle}
 tr:last-child td{border-bottom:none}
 tr:hover td{background:#fafafa}
-.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700}
-.grade-A{background:#e8f5e9;color:#2e7d32}
-.grade-B{background:#fff8e1;color:#f57f17}
-.grade-C{background:#fff3e0;color:#e65100}
-.grade-D{background:#fce4ec;color:#c62828}
-.grade-F{background:#f3e5f5;color:#6a1b9a}
+
+.metric-cell{display:flex;flex-direction:column;gap:3px}
+.wer-pill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-weight:800;font-size:12px;letter-spacing:.2px}
+.cer-row{display:flex;align-items:center;gap:4px;font-size:11px;color:#888}
+.cer-dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0}
+.wer-bar-wrap{width:60px;height:5px;background:#eee;border-radius:3px;display:inline-block;vertical-align:middle;margin-left:4px}
+.wer-bar-fill{height:100%;border-radius:3px}
+
 .subtabs{display:flex;gap:4px;padding:12px 20px 0;border-bottom:1px solid #e8eaf6;flex-wrap:wrap}
 .stab{padding:7px 14px;border-radius:8px 8px 0 0;cursor:pointer;font-size:12px;font-weight:600;color:#666;border:1px solid transparent;border-bottom:none;transition:.15s}
 .stab.active{background:#fff;color:#1a237e;border-color:#e8eaf6;border-bottom-color:#fff;margin-bottom:-1px}
 .stab:hover:not(.active){background:#f5f5f5}
-.subpanel{display:none;padding:20px}
-.subpanel.active{display:block}
+.subpanel{display:none;padding:20px}.subpanel.active{display:block}
+
 .rec-row{border:1px solid #e8eaf6;border-radius:8px;margin-bottom:10px;overflow:hidden}
 .rec-head{padding:10px 14px;background:#f8f9ff;display:flex;align-items:center;justify-content:space-between;cursor:pointer;gap:10px;flex-wrap:wrap}
 .rec-head:hover{background:#eef0fb}
 .rec-name{font-weight:700;font-size:13px;color:#1a237e;flex:1}
-.rec-metrics{display:flex;gap:12px;flex-wrap:wrap}
+.rec-metrics{display:flex;gap:8px;flex-wrap:wrap}
 .metric-chip{font-size:11px;color:#555;background:#fff;border:1px solid #e0e0e0;padding:2px 8px;border-radius:10px}
-.metric-chip b{color:#1a237e}
-.rec-body{display:none;padding:14px;border-top:1px solid #e8eaf6}
-.rec-body.open{display:block}
+.rec-body{display:none;padding:14px;border-top:1px solid #e8eaf6}.rec-body.open{display:block}
+
 .diff-block{margin-bottom:14px}
 .diff-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;color:#888}
-.diff-text{background:#fafafa;border:1px solid #eee;border-radius:6px;padding:10px;font-size:13px;line-height:1.9;direction:ltr}
+.diff-text{background:#fafafa;border:1px solid #eee;border-radius:6px;padding:10px;font-size:13px;line-height:1.9}
 .ddel{background:#ffebee;color:#c62828;font-weight:800;text-decoration:line-through;text-decoration-color:#ef5350;border-radius:3px;padding:0 3px;border:1px solid #ffcdd2}
 .dins{background:#fff3e0;color:#bf360c;font-weight:800;border-radius:3px;padding:0 3px;border:1px solid #ffe0b2}
 .og-text{background:#e8f5e9;border:1px solid #c8e6c9;border-radius:6px;padding:10px;font-size:13px;line-height:1.8;margin-bottom:12px;color:#1b5e20}
 .og-label{font-size:11px;font-weight:700;color:#2e7d32;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
 .legend{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;font-size:12px}
 .legend-item{display:flex;align-items:center;gap:6px}
+
 .progress-wrap{text-align:center;padding:40px;color:#666}
 .progress-bar{height:4px;background:#e8eaf6;border-radius:2px;overflow:hidden;margin-top:8px}
 .progress-fill{height:100%;background:#3f51b5;border-radius:2px;transition:width .3s}
 .cost-table-wrap{overflow-x:auto}
 .empty-state{text-align:center;padding:60px 20px;color:#999}
 .empty-state .big{font-size:3rem;margin-bottom:12px}
-.wer-bar{display:inline-block;height:8px;border-radius:4px;vertical-align:middle;margin-left:6px;opacity:.7}
-.tag{display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;border-radius:3px;margin-left:4px;vertical-align:middle}
-.tag-gemini{background:#fff3e0;color:#e65100}
-.tag-t2e{background:#e0f2f1;color:#00695c}
+
+/* heatmap legend */
+.hm-legend{display:flex;align-items:center;gap:6px;font-size:11px;color:#888;margin-bottom:14px}
+.hm-bar{height:10px;width:120px;border-radius:5px;background:linear-gradient(to right,#43a047,#ffb300,#e53935)}
 </style>
 </head>
 <body>
@@ -85,7 +84,7 @@ tr:hover td{background:#fafafa}
 <div class="app-header">
   <div class="app-header-left">
     <h1>🎙️ Armenian STT Model Comparator</h1>
-    <div class="sub">Upload Notion CSV export — auto-detects all models</div>
+    <div class="sub">Upload Notion CSV — auto-detects all model columns</div>
   </div>
   <div class="app-header-right">
     <div class="rate-wrap">AMD/USD <input type="number" id="amd-rate" value="400" min="1"> ֏</div>
@@ -100,7 +99,7 @@ tr:hover td{background:#fafafa}
     <div class="empty-state">
       <div class="big">📊</div>
       <div style="font-weight:700;font-size:1.1rem;color:#333;margin-bottom:8px">Drop your Notion CSV to begin</div>
-      <p>The tool auto-detects every model column — no configuration needed.<br>
+      <p>Auto-detects every model column — no configuration needed.<br>
       Fixed columns: <b>Name</b>, <b>Duration</b>, <b>OG TEXT</b> — everything else = a model.</p>
     </div>
   </div>
@@ -114,7 +113,6 @@ tr:hover td{background:#fafafa}
 
   <div id="results" style="display:none">
 
-    <!-- Summary cards -->
     <div class="section">
       <div class="section-header"><h2>📈 Summary</h2></div>
       <div class="section-body">
@@ -122,22 +120,24 @@ tr:hover td{background:#fafafa}
       </div>
     </div>
 
-    <!-- Overall Results -->
     <div class="section">
       <div class="section-header"><h2>📊 Overall Results</h2></div>
       <div class="section-body">
+        <div class="hm-legend">
+          <span>WER color scale:</span>
+          <div class="hm-bar"></div>
+          <span>0% (best) → 100% (worst)</span>
+        </div>
         <div id="overall-table-wrap" class="cost-table-wrap"></div>
       </div>
     </div>
 
-    <!-- Per-Recording Results -->
     <div class="section">
       <div class="section-header"><h2>🎧 Per-Recording Results</h2></div>
       <div class="subtabs" id="subtabs"></div>
       <div id="subpanels"></div>
     </div>
 
-    <!-- Cost Analysis -->
     <div class="section" id="cost-section">
       <div class="section-header"><h2>💰 Cost Analysis</h2></div>
       <div class="section-body">
@@ -150,12 +150,36 @@ tr:hover td{background:#fafafa}
 
 <script>
 // ── Constants ──────────────────────────────────────────────────────────────
-const FIXED_KEYS = ['name','duration','og text','og_text','ogtext','status','recording name','recording'];
-const GEM_IN_USD=1.50, GEM_OUT_USD=9.00, GEM_TOK_S=25, GEM_TOK_W=1.5;
-const WER_CAP=600, CER_CAP=1000, DIFF_CAP=400;
+const GEM_IN_USD=1.50,GEM_OUT_USD=9.00,GEM_TOK_S=25,GEM_TOK_W=1.5;
+const WER_CAP=600,CER_CAP=1000,DIFF_CAP=400;
 const PALETTE=['#5c6bc0','#00897b','#e65100','#8e24aa','#d81b60','#00838f','#558b2f','#6d4c41','#546e7a','#f4511e'];
 
-let MODELS=[], rows=[], colMap={};
+let MODELS=[],rows=[],colMap={};
+
+// ── Heatmap color: 0=green, 0.5=amber, 1=red ──────────────────────────────
+function heatColor(v){
+  // green #43a047 → amber #ffb300 → red #e53935
+  v=Math.max(0,Math.min(1,v));
+  if(v<0.5){
+    const t=v*2;
+    return lerpRGB([67,160,71],[255,179,0],t);
+  } else {
+    const t=(v-0.5)*2;
+    return lerpRGB([255,179,0],[229,57,53],t);
+  }
+}
+function lerpRGB(a,b,t){
+  return `rgb(${Math.round(a[0]+(b[0]-a[0])*t)},${Math.round(a[1]+(b[1]-a[1])*t)},${Math.round(a[2]+(b[2]-a[2])*t)})`;
+}
+function hexToRgb(hex){
+  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  return [r,g,b];
+}
+function colorWithAlpha(rgb,alpha){
+  // rgb is "rgb(r,g,b)" string — extract and return rgba
+  const m=rgb.match(/\d+/g);
+  return `rgba(${m[0]},${m[1]},${m[2]},${alpha})`;
+}
 
 // ── CSV Parser ─────────────────────────────────────────────────────────────
 function parseCSV(text){
@@ -167,7 +191,7 @@ function parseCSV(text){
     else if(c==='\n'&&!inQ){lines.push(cur);cur='';}
     else cur+=c;
   }
-  if(cur) lines.push(cur);
+  if(cur)lines.push(cur);
   return lines.map(l=>{
     const cells=[];let val='',inQ=false;
     for(let i=0;i<l.length;i++){
@@ -185,40 +209,33 @@ function parseCSV(text){
 function detectColumns(headers){
   colMap={};
   const hLow=headers.map(h=>h.toLowerCase().trim());
-  // Find fixed columns
   hLow.forEach((h,i)=>{
-    if(/name|title|recording/.test(h)&&!colMap.name) colMap.name=i;
-    else if(/duration|dur|length/.test(h)&&!colMap.dur) colMap.dur=i;
-    else if(/og.?text|ground.?truth|reference|original/.test(h)&&!colMap.og) colMap.og=i;
+    if(/name|title|recording/.test(h)&&colMap.name==null) colMap.name=i;
+    else if(/duration|dur|length/.test(h)&&colMap.dur==null) colMap.dur=i;
+    else if(/og.?text|ground.?truth|reference|original/.test(h)&&colMap.og==null) colMap.og=i;
     else if(h==='status') colMap.status=i;
   });
-  // Everything else = model
   const modelCols=[];
   hLow.forEach((h,i)=>{
     if(i===colMap.name||i===colMap.dur||i===colMap.og||i===colMap.status) return;
     if(!h) return;
-    modelCols.push({idx:i, label:headers[i].trim(), key:h.replace(/\s+/g,'_')});
+    modelCols.push({idx:i,label:headers[i].trim(),key:h.replace(/\s+/g,'_')});
   });
   return modelCols;
 }
 
 // ── Text Normalization ─────────────────────────────────────────────────────
 function normAM(t){
-  if(!t) return '';
-  // Strip "Done\n" status prefix
+  if(!t)return'';
   t=t.replace(/^Done\s*\n/i,'').replace(/^(done|pending|in.?progress)\s*[\n,]/i,'');
-  // Strip [MM:SS] timestamps
   t=t.replace(/\[\d{1,2}:\d{2}(?::\d{2})?\]/g,' ');
-  // Strip diarization labels: "Speaker 1 (00:00-01:23):"
   t=t.replace(/Speaker\s*\d+\s*\([^)]+\)\s*:?\s*/gi,' ');
-  // Normalize punctuation & case
   t=t.toLowerCase().replace(/[։՞՛՜՝«»„""]/g,' ').replace(/[.,!?;:(){}\[\]]/g,' ').replace(/\s+/g,' ').trim();
   return t;
 }
 
 function parseDur(s){
-  if(!s) return null;
-  // Extract last timestamp from OG TEXT
+  if(!s)return null;
   const m=String(s).match(/(\d+):(\d{2})(?::(\d{2}))?/g);
   if(m){const last=m[m.length-1].split(':').map(Number);return last.length===3?last[0]*3600+last[1]*60+last[2]:last[0]*60+last[1];}
   const n=parseFloat(s);return isNaN(n)?null:n;
@@ -226,40 +243,37 @@ function parseDur(s){
 
 // ── WER / CER ──────────────────────────────────────────────────────────────
 function tkW(t){return t.split(/\s+/).filter(Boolean);}
-
 function editDist2Row(a,b){
   let prev=new Uint16Array(b.length+1);
-  for(let j=0;j<=b.length;j++) prev[j]=j;
+  for(let j=0;j<=b.length;j++)prev[j]=j;
   for(let i=1;i<=a.length;i++){
-    const cur=new Uint16Array(b.length+1); cur[0]=i;
+    const cur=new Uint16Array(b.length+1);cur[0]=i;
     for(let j=1;j<=b.length;j++)
       cur[j]=a[i-1]===b[j-1]?prev[j-1]:1+Math.min(prev[j-1],prev[j],cur[j-1]);
     prev=cur;
   }
   return prev[b.length];
 }
-
 function wer(ref,hyp){
-  if(!ref) return 0;
-  const r=tkW(ref).slice(0,WER_CAP), h=tkW(hyp).slice(0,WER_CAP);
-  if(!r.length) return 0;
+  if(!ref)return 0;
+  const r=tkW(ref).slice(0,WER_CAP),h=tkW(hyp).slice(0,WER_CAP);
+  if(!r.length)return 0;
   return Math.min(editDist2Row(r,h)/r.length,1);
 }
-
 function cer(ref,hyp){
-  if(!ref) return 0;
-  const r=[...ref].slice(0,CER_CAP), h=[...hyp].slice(0,CER_CAP);
-  if(!r.length) return 0;
+  if(!ref)return 0;
+  const r=[...ref].slice(0,CER_CAP),h=[...hyp].slice(0,CER_CAP);
+  if(!r.length)return 0;
   return Math.min(editDist2Row(r,h)/r.length,1);
 }
 
-// ── Diff Builder ───────────────────────────────────────────────────────────
+// ── Diff ───────────────────────────────────────────────────────────────────
 function buildOps(ref,hyp){
-  const rw=tkW(ref).slice(0,DIFF_CAP), hw=tkW(hyp).slice(0,DIFF_CAP);
-  if(!rw.length&&!hw.length) return [];
-  const m=rw.length, n=hw.length;
+  const rw=tkW(ref).slice(0,DIFF_CAP),hw=tkW(hyp).slice(0,DIFF_CAP);
+  if(!rw.length&&!hw.length)return[];
+  const m=rw.length,n=hw.length;
   const dp=Array.from({length:m+1},(_,i)=>{const r=new Uint16Array(n+1);r[0]=i;if(!i)for(let j=1;j<=n;j++)r[j]=j;return r;});
-  for(let i=1;i<=m;i++) for(let j=1;j<=n;j++)
+  for(let i=1;i<=m;i++)for(let j=1;j<=n;j++)
     dp[i][j]=rw[i-1]===hw[j-1]?dp[i-1][j-1]:1+Math.min(dp[i-1][j-1],dp[i-1][j],dp[i][j-1]);
   const ops=[];let i=m,j=n;
   while(i>0||j>0){
@@ -270,54 +284,49 @@ function buildOps(ref,hyp){
   }
   return ops;
 }
-
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-
 function opsHTML(ops){
   return ops.map(o=>{
-    if(o.t==='eq') return esc(o.r);
-    if(o.t==='del') return `<span class="ddel">${esc(o.r)}</span>`;
-    if(o.t==='ins') return `<span class="dins">${esc(o.h)}</span>`;
-    return `<span class="ddel">${esc(o.r)}</span><span class="dins">${esc(o.h)}</span>`;
+    if(o.t==='eq')return esc(o.r);
+    if(o.t==='del')return`<span class="ddel">${esc(o.r)}</span>`;
+    if(o.t==='ins')return`<span class="dins">${esc(o.h)}</span>`;
+    return`<span class="ddel">${esc(o.r)}</span><span class="dins">${esc(o.h)}</span>`;
   }).join(' ');
 }
-
 function opsMDNotion(ops){
-  if(!ops.length) return '*(empty)*';
+  if(!ops.length)return'*(empty)*';
   return ops.map(o=>{
-    if(o.t==='eq') return o.r;
-    if(o.t==='del') return `~~${o.r}~~`;
-    if(o.t==='ins') return `<mark>${o.h}</mark>`;
-    return `~~${o.r}~~ <mark>${o.h}</mark>`;
+    if(o.t==='eq')return o.r;
+    if(o.t==='del')return`~~${o.r}~~`;
+    if(o.t==='ins')return`<mark>${o.h}</mark>`;
+    return`~~${o.r}~~ <mark>${o.h}</mark>`;
   }).join(' ');
 }
 
-// ── Gemini Cost ────────────────────────────────────────────────────────────
-function isGemini(label){ return /gemini/i.test(label); }
-function isTalk2Edit(label){ return /talk.?2.?edit|t2e/i.test(label); }
-
-function gemCalc(durSec, txt){
-  if(durSec==null) return null;
+// ── Gemini cost ────────────────────────────────────────────────────────────
+function isGemini(label){return/gemini/i.test(label);}
+function gemCalc(durSec,txt){
+  if(durSec==null)return null;
   const rate=parseFloat(document.getElementById('amd-rate').value)||400;
   const inTok=Math.round(durSec*GEM_TOK_S);
   const wc=(txt||'').trim().split(/\s+/).filter(Boolean).length;
   const outTok=Math.round(wc*GEM_TOK_W);
-  const inUSD=inTok/1e6*GEM_IN_USD, outUSD=outTok/1e6*GEM_OUT_USD;
-  return {inTok,outTok,wc,tot:inTok+outTok,inUSD,outUSD,amd:+((inUSD+outUSD)*rate).toFixed(4)};
+  const inUSD=inTok/1e6*GEM_IN_USD,outUSD=outTok/1e6*GEM_OUT_USD;
+  return{inTok,outTok,wc,tot:inTok+outTok,inUSD,outUSD,amd:+((inUSD+outUSD)*rate).toFixed(4)};
 }
 
 // ── Grade ──────────────────────────────────────────────────────────────────
 function wLabel(w){
-  if(w<=0.10) return {g:'A',t:'Excellent'};
-  if(w<=0.25) return {g:'B',t:'Good'};
-  if(w<=0.40) return {g:'C',t:'Fair'};
-  if(w<=0.60) return {g:'D',t:'Poor'};
-  return {g:'F',t:'Very Poor'};
+  if(w<=0.10)return{g:'A',t:'Excellent'};
+  if(w<=0.25)return{g:'B',t:'Good'};
+  if(w<=0.40)return{g:'C',t:'Fair'};
+  if(w<=0.60)return{g:'D',t:'Poor'};
+  return{g:'F',t:'Very Poor'};
 }
 
 // ── File Handler ───────────────────────────────────────────────────────────
 function handleFile(input){
-  const file=input.files[0]; if(!file) return;
+  const file=input.files[0];if(!file)return;
   const reader=new FileReader();
   reader.onload=e=>processCSV(e.target.result);
   reader.readAsText(file,'UTF-8');
@@ -327,35 +336,26 @@ function processCSV(text){
   document.getElementById('empty-state').style.display='none';
   document.getElementById('results').style.display='none';
   document.getElementById('progress-section').style.display='block';
-
   const parsed=parseCSV(text);
   if(parsed.length<2){alert('CSV appears empty.');return;}
-
   const headers=parsed[0];
   const modelCols=detectColumns(headers);
-
-  if(!modelCols.length){alert('No model columns detected. Make sure your CSV has columns beyond Name/Duration/OG TEXT.');return;}
-
-  // Build MODELS array with colors
+  if(!modelCols.length){alert('No model columns detected.');return;}
   MODELS=modelCols.map((mc,i)=>({...mc,color:PALETTE[i%PALETTE.length]}));
   rows=[];
-
   const dataRows=parsed.slice(1).filter(r=>r.some(c=>c));
   let idx=0;
-
   function next(){
     if(idx>=dataRows.length){finalize();return;}
     const pct=Math.round(idx/dataRows.length*100);
     document.getElementById('prog-fill').style.width=pct+'%';
     document.getElementById('prog-label').textContent=`Processing row ${idx+1} of ${dataRows.length}…`;
-
     const r=dataRows[idx++];
-    const name=(colMap.name!=null?r[colMap.name]||'':'Row '+(idx)).replace(/^Done\s*\n?/i,'').trim();
+    const name=(colMap.name!=null?r[colMap.name]||'':'Row '+idx).replace(/^Done\s*\n?/i,'').trim();
     const ogRaw=colMap.og!=null?r[colMap.og]||'':'';
     const durRaw=colMap.dur!=null?r[colMap.dur]||'':'';
     const durSec=parseDur(ogRaw)||parseDur(durRaw);
     const ogNorm=normAM(ogRaw);
-
     const modelData={};
     MODELS.forEach(m=>{
       const raw=r[m.idx]||'';
@@ -365,7 +365,6 @@ function processCSV(text){
       const cost=isGemini(m.label)?gemCalc(durSec,raw):null;
       modelData[m.key]={raw,norm,wer:w,cer:c,cost};
     });
-
     rows.push({name,ogRaw,ogNorm,durSec,modelData});
     setTimeout(next,0);
   }
@@ -383,33 +382,49 @@ function finalize(){
   renderCost();
 }
 
-// ── Summary Cards ──────────────────────────────────────────────────────────
+// ── Summary ────────────────────────────────────────────────────────────────
 function renderSummary(){
   const el=document.getElementById('summary-cards');
-  let html=`<div class="card"><div class="val">${rows.length}</div><div class="lbl">Recordings</div></div>`;
   const totalDur=rows.reduce((s,r)=>s+(r.durSec||0),0);
-  html+=`<div class="card"><div class="val">${fmtDur(totalDur)}</div><div class="lbl">Total Duration</div></div>`;
-  html+=`<div class="card"><div class="val">${MODELS.length}</div><div class="lbl">Models Detected</div></div>`;
+  let h=`<div class="card"><div class="val">${rows.length}</div><div class="lbl">Recordings</div></div>`;
+  h+=`<div class="card"><div class="val">${fmtDur(totalDur)}</div><div class="lbl">Total Duration</div></div>`;
+  h+=`<div class="card"><div class="val">${MODELS.length}</div><div class="lbl">Models Detected</div></div>`;
   MODELS.forEach(m=>{
-    const wers=rows.map(r=>r.modelData[m.key].wer).filter(x=>x!=null);
-    const med=median(wers);
-    html+=`<div class="card model-card" style="--mc:${m.color}"><div class="val">${pct(med)}</div><div class="lbl">${m.label} WER</div></div>`;
+    const med=median(rows.map(r=>r.modelData[m.key].wer));
+    const col=heatColor(med);
+    h+=`<div class="card model-card" style="--mc:${col}"><div class="val" style="color:${col}">${pct(med)}</div><div class="lbl">${m.label} med. WER</div></div>`;
   });
-  el.innerHTML=html;
+  el.innerHTML=h;
 }
 
-// ── Overall Table ──────────────────────────────────────────────────────────
+// ── Overall Results ────────────────────────────────────────────────────────
 function renderOverall(){
   const wrap=document.getElementById('overall-table-wrap');
   let h=`<table><thead><tr><th>#</th><th>Recording</th>`;
-  MODELS.forEach(m=>h+=`<th style="color:${m.color}">${m.label}<br><small>WER / CER</small></th>`);
+  MODELS.forEach(m=>h+=`<th><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${m.color};margin-right:5px;vertical-align:middle"></span>${m.label}</th>`);
   h+=`</tr></thead><tbody>`;
   rows.forEach((r,i)=>{
-    h+=`<tr><td>${i+1}</td><td><b>${esc(r.name)}</b></td>`;
+    h+=`<tr><td style="color:#999;font-size:12px">${i+1}</td><td><b>${esc(r.name)}</b></td>`;
     MODELS.forEach(m=>{
       const d=r.modelData[m.key];
-      const {g}=wLabel(d.wer);
-      h+=`<td><span class="badge grade-${g}">${pct(d.wer)}</span> <small style="color:#999">/ ${pct(d.cer)}</small></td>`;
+      const wc=heatColor(d.wer);
+      const cc=heatColor(d.cer);
+      const werPct=Math.round(d.wer*100);
+      const cerPct=Math.round(d.cer*100);
+      h+=`<td>
+        <div class="metric-cell">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span class="wer-pill" style="background:${colorWithAlpha(wc,0.15)};color:${wc};border:1.5px solid ${colorWithAlpha(wc,0.4)}">
+              ${werPct}%
+            </span>
+            <div class="wer-bar-wrap"><div class="wer-bar-fill" style="width:${werPct}%;background:${wc}"></div></div>
+          </div>
+          <div class="cer-row">
+            <span class="cer-dot" style="background:${cc}"></span>
+            <span>CER ${cerPct}%</span>
+          </div>
+        </div>
+      </td>`;
     });
     h+=`</tr>`;
   });
@@ -421,22 +436,19 @@ function renderOverall(){
 function renderPerRecording(){
   const tabsEl=document.getElementById('subtabs');
   const panelsEl=document.getElementById('subpanels');
-
-  // Build tabs: All Recordings + one per model
   const tabs=[{id:'all',label:'All Recordings'},...MODELS.map(m=>({id:m.key,label:`${m.label} Diff`}))];
-
   tabsEl.innerHTML=tabs.map((t,i)=>`<div class="stab${i===0?' active':''}" onclick="switchTab('${t.id}',this)">${t.label}</div>`).join('');
+  let html='';
 
-  let panelsHTML='';
-
-  // All Recordings panel
-  panelsHTML+=`<div class="subpanel active" id="panel-all">`;
+  // All panel
+  html+=`<div class="subpanel active" id="panel-all">`;
   rows.forEach((r,ri)=>{
     const chips=MODELS.map(m=>{
       const d=r.modelData[m.key];
-      return `<span class="metric-chip" style="border-color:${m.color}20"><b style="color:${m.color}">${m.label}</b> WER ${pct(d.wer)} CER ${pct(d.cer)}</span>`;
+      const wc=heatColor(d.wer);
+      return `<span class="metric-chip" style="border-color:${m.color}40"><b style="color:${m.color}">${m.label}</b> <span style="color:${wc};font-weight:700">${pct(d.wer)}</span> WER</span>`;
     }).join('');
-    panelsHTML+=`<div class="rec-row">
+    html+=`<div class="rec-row">
       <div class="rec-head" onclick="toggleRec(this)">
         <span class="rec-name">${esc(r.name)}</span>
         <div class="rec-metrics">${chips}</div>
@@ -449,31 +461,32 @@ function renderPerRecording(){
         <div class="diff-block">
           <div class="diff-label" style="color:${m.color}">▸ ${m.label} — WER ${pct(r.modelData[m.key].wer)} / CER ${pct(r.modelData[m.key].cer)}</div>
           <div class="diff-text" data-ref="${ri}" data-model="${m.key}" data-computed="0">
-            <em style="color:#aaa">Click row header to load diff…</em>
+            <em style="color:#aaa">Expand to load diff…</em>
           </div>
         </div>`).join('')}
       </div>
     </div>`;
   });
-  panelsHTML+=`</div>`;
+  html+=`</div>`;
 
-  // Per-model diff panels
+  // Per-model panels
   MODELS.forEach(m=>{
-    panelsHTML+=`<div class="subpanel" id="panel-${m.key}">
+    html+=`<div class="subpanel" id="panel-${m.key}">
       <div class="legend">
         <div class="legend-item"><span class="ddel">word</span> = Omission (missed)</div>
         <div class="legend-item"><span class="dins">word</span> = Hallucination (added)</div>
       </div>`;
     rows.forEach((r,ri)=>{
       const d=r.modelData[m.key];
-      const {g,t}=wLabel(d.wer);
-      panelsHTML+=`<div class="rec-row">
+      const wc=heatColor(d.wer);
+      const {t}=wLabel(d.wer);
+      html+=`<div class="rec-row">
         <div class="rec-head" onclick="toggleRec(this)">
           <span class="rec-name">${esc(r.name)}</span>
           <div class="rec-metrics">
-            <span class="metric-chip"><b>WER</b> ${pct(d.wer)}</span>
-            <span class="metric-chip"><b>CER</b> ${pct(d.cer)}</span>
-            <span class="badge grade-${g}">${t}</span>
+            <span class="metric-chip">WER <b style="color:${wc}">${pct(d.wer)}</b></span>
+            <span class="metric-chip">CER <b style="color:${heatColor(d.cer)}">${pct(d.cer)}</b></span>
+            <span class="metric-chip" style="color:${wc};font-weight:700">${t}</span>
           </div>
           <span style="color:#aaa;font-size:18px">▾</span>
         </div>
@@ -487,10 +500,10 @@ function renderPerRecording(){
         </div>
       </div>`;
     });
-    panelsHTML+=`</div>`;
+    html+=`</div>`;
   });
 
-  panelsEl.innerHTML=panelsHTML;
+  panelsEl.innerHTML=html;
 }
 
 function toggleRec(head){
@@ -499,10 +512,8 @@ function toggleRec(head){
   head.querySelector('span:last-child').textContent=open?'▴':'▾';
   if(open){
     body.querySelectorAll('.diff-text[data-computed="0"]').forEach(el=>{
-      const ri=parseInt(el.dataset.ref);
-      const mk=el.dataset.model;
-      const row=rows[ri];
-      const ops=buildOps(row.ogNorm, row.modelData[mk].norm);
+      const ri=parseInt(el.dataset.ref),mk=el.dataset.model,row=rows[ri];
+      const ops=buildOps(row.ogNorm,row.modelData[mk].norm);
       el.innerHTML=ops.length?opsHTML(ops):'<em style="color:#888">No reference text — diff unavailable</em>';
       el.dataset.computed='1';
     });
@@ -520,25 +531,21 @@ function switchTab(id,el){
 function renderCost(){
   const gemModels=MODELS.filter(m=>isGemini(m.label));
   const wrap=document.getElementById('cost-table-wrap');
-  if(!gemModels.length){
-    document.getElementById('cost-section').style.display='none';
-    return;
-  }
+  if(!gemModels.length){document.getElementById('cost-section').style.display='none';return;}
   const rate=parseFloat(document.getElementById('amd-rate').value)||400;
   let h=`<p style="margin-bottom:12px;color:#666;font-size:13px">Gemini pricing: <b>$${GEM_IN_USD}/1M</b> audio input tokens (${GEM_TOK_S} tok/s) + <b>$${GEM_OUT_USD}/1M</b> output tokens (${GEM_TOK_W} tok/word). Rate: ${rate} ֏/USD.</p>`;
   h+=`<table><thead><tr><th>#</th><th>Recording</th><th>Duration</th>`;
-  gemModels.forEach(m=>h+=`<th style="color:${m.color}">${m.label}<br><small>In/Out Tok · AMD</small></th>`);
+  gemModels.forEach(m=>h+=`<th style="color:${m.color}">${m.label} Cost</th>`);
   h+=`</tr></thead><tbody>`;
   rows.forEach((r,i)=>{
-    h+=`<tr><td>${i+1}</td><td>${esc(r.name)}</td><td>${r.durSec?fmtDur(r.durSec):'—'}</td>`;
+    h+=`<tr><td style="color:#999">${i+1}</td><td>${esc(r.name)}</td><td>${r.durSec?fmtDur(r.durSec):'—'}</td>`;
     gemModels.forEach(m=>{
       const c=r.modelData[m.key].cost;
       if(!c){h+=`<td style="color:#aaa">—</td>`;return;}
-      h+=`<td>${c.inTok.toLocaleString()}/${c.outTok.toLocaleString()} · <b>${c.amd} ֏</b></td>`;
+      h+=`<td>${c.inTok.toLocaleString()}/${c.outTok.toLocaleString()} tok · <b>${c.amd} ֏</b></td>`;
     });
     h+=`</tr>`;
   });
-  // Totals
   h+=`<tr style="background:#f5f5f5;font-weight:700"><td colspan="3">TOTAL</td>`;
   gemModels.forEach(m=>{
     const vals=rows.map(r=>r.modelData[m.key].cost).filter(Boolean);
@@ -556,168 +563,108 @@ function pct(v){return v==null?'—':(v*100).toFixed(1)+'%';}
 function fmtDur(s){if(!s)return'—';const m=Math.floor(s/60),sec=Math.round(s%60);return`${m}:${String(sec).padStart(2,'0')}`;}
 function median(arr){if(!arr.length)return 0;const s=[...arr].sort((a,b)=>a-b);const m=Math.floor(s.length/2);return s.length%2?s[m]:(s[m-1]+s[m])/2;}
 
-// ── Report Download ────────────────────────────────────────────────────────
+// ── Report ─────────────────────────────────────────────────────────────────
 function downloadReport(){
   if(!rows.length){alert('Load a CSV first.');return;}
   const rate=parseFloat(document.getElementById('amd-rate').value)||400;
   const date=new Date().toLocaleDateString('en-GB',{year:'numeric',month:'long',day:'numeric'});
   const totalDur=rows.reduce((s,r)=>s+(r.durSec||0),0);
-
   let md='';
 
-  // ── Cover ──
   md+=`# Armenian STT Model Comparison Report\n\n`;
-  md+=`**Generated:** ${date}  \n`;
-  md+=`**Recordings analyzed:** ${rows.length}  \n`;
-  md+=`**Total audio duration:** ${fmtDur(totalDur)}  \n`;
-  md+=`**Models compared:** ${MODELS.map(m=>m.label).join(', ')}  \n`;
-  md+=`**Exchange rate:** ${rate} AMD/USD  \n\n---\n\n`;
+  md+=`**Generated:** ${date}  \n**Recordings:** ${rows.length}  \n**Duration:** ${fmtDur(totalDur)}  \n**Models:** ${MODELS.map(m=>m.label).join(', ')}  \n**Rate:** ${rate} AMD/USD  \n\n---\n\n`;
 
-  // ── TOC ──
-  md+=`## Table of Contents\n\n`;
-  md+=`1. Executive Summary\n2. Methodology & Metrics Explained\n3. Overall Results\n4. Model-by-Model Analysis\n5. Cost Analysis\n6. Recommendations\n7. Per-Recording Details\n8. Glossary\n\n---\n\n`;
+  md+=`## Table of Contents\n\n1. Executive Summary\n2. Methodology & Metrics Explained\n3. Overall Results\n4. Model-by-Model Analysis\n5. Cost Analysis\n6. Recommendations\n7. Per-Recording Details\n8. Glossary\n\n---\n\n`;
 
-  // ── Executive Summary ──
   md+=`## 1. Executive Summary\n\n`;
   const ranked=[...MODELS].map(m=>({m,med:median(rows.map(r=>r.modelData[m.key].wer))})).sort((a,b)=>a.med-b.med);
-  md+=`This report compares **${MODELS.length} speech-to-text models** across **${rows.length} Armenian call recordings** with a combined duration of **${fmtDur(totalDur)}**. Models are evaluated on Word Error Rate (WER), Character Error Rate (CER), and — where applicable — API cost.\n\n`;
+  md+=`This report compares **${MODELS.length} speech-to-text models** across **${rows.length} Armenian call recordings** (total: **${fmtDur(totalDur)}**).\n\n`;
   md+=`| Model | Median WER | Median CER | Grade |\n|-------|:----------:|:----------:|:-----:|\n`;
   MODELS.forEach(m=>{
-    const wers=rows.map(r=>r.modelData[m.key].wer);
-    const cers=rows.map(r=>r.modelData[m.key].cer);
-    const mw=median(wers), mc=median(cers);
-    const {g,t}=wLabel(mw);
+    const mw=median(rows.map(r=>r.modelData[m.key].wer));
+    const mc=median(rows.map(r=>r.modelData[m.key].cer));
+    const{g,t}=wLabel(mw);
     md+=`| ${m.label} | ${pct(mw)} | ${pct(mc)} | ${g} — ${t} |\n`;
   });
-  md+=`\n**Best overall:** ${ranked[0].m.label} (median WER ${pct(ranked[0].med)})\n\n---\n\n`;
+  md+=`\n**Best overall:** ${ranked[0].m.label} (${pct(ranked[0].med)} median WER)\n\n---\n\n`;
 
-  // ── Methodology ──
   md+=`## 2. Methodology & Metrics Explained\n\n`;
-  md+=`### What is WER (Word Error Rate)?\n\nWER measures how many word-level mistakes a model makes compared to a verified human transcript (OG TEXT).\n\n`;
-  md+=`**Formula:** \`WER = (Substitutions + Deletions + Insertions) ÷ Reference Word Count\`\n\n`;
-  md+=`- **Substitution** — model said a wrong word (e.g. said "բարեւ" instead of "բարի")\n- **Deletion** — model missed a word entirely\n- **Insertion** — model hallucinated a word that wasn't spoken\n\nWER is capped at the first ${WER_CAP} words per recording for performance.\n\n`;
-  md+=`### What is CER (Character Error Rate)?\n\nCER applies the same logic at the character level. It is more granular and often more informative for agglutinative languages like Armenian, where a single word can carry many suffixes.\n\nCER is sampled on the first ${CER_CAP} characters.\n\n`;
-  md+=`### Score Interpretation\n\n| WER Range | Grade | Meaning |\n|-----------|:-----:|---------|\n| 0–10% | A | Excellent — nearly perfect |\n| 11–25% | B | Good — usable with minor edits |\n| 26–40% | C | Fair — needs moderate review |\n| 41–60% | D | Poor — significant errors |\n| 61%+ | F | Very poor — not production-ready |\n\n`;
-  md+=`### Diff Highlighting Legend\n\n| Format | Meaning |\n|--------|---------|\n| ~~strikethrough~~ | **Omission** — model missed this word from the ground truth |\n| \`<mark>highlighted</mark>\` | **Hallucination** — model added this word (not in ground truth) |\n| Normal text | **Correct** — matches ground truth |\n\n---\n\n`;
+  md+=`### WER (Word Error Rate)\n\nWER counts word-level mistakes: substitutions (wrong word), deletions (missing word), and insertions (hallucinated word), divided by the total reference word count.\n\n**Formula:** \`WER = (S + D + I) ÷ N\`  where N = reference word count. Capped at ${WER_CAP} words/recording.\n\n`;
+  md+=`### CER (Character Error Rate)\n\nSame as WER but at the character level. More informative for Armenian, which is agglutinative (one root word + many suffixes = very different surface forms). Capped at ${CER_CAP} characters.\n\n`;
+  md+=`### Score Interpretation\n\n| WER | Grade | Meaning |\n|-----|:-----:|---------|\n| 0–10% | A | Excellent |\n| 11–25% | B | Good |\n| 26–40% | C | Fair |\n| 41–60% | D | Poor |\n| 61%+ | F | Very Poor |\n\n`;
+  md+=`### Diff Legend\n\n| Format | Meaning |\n|--------|---------|\n| ~~strikethrough~~ | Omission — model missed this word |\n| \`<mark>highlight</mark>\` | Hallucination — model added this word |\n| Normal | Correct |\n\n---\n\n`;
 
-  // ── Overall Results ──
-  md+=`## 3. Overall Results\n\n`;
-  md+=`### WER per Recording\n\n`;
-  md+=`| # | Recording |${MODELS.map(m=>` ${m.label} WER |`).join('')}\n`;
-  md+=`|---|-----------|${MODELS.map(()=>`:----------:|`).join('')}\n`;
-  rows.forEach((r,i)=>{
-    md+=`| ${i+1} | ${r.name} |${MODELS.map(m=>` ${pct(r.modelData[m.key].wer)} |`).join('')}\n`;
-  });
+  md+=`## 3. Overall Results\n\n### WER per Recording\n\n`;
+  md+=`| # | Recording |${MODELS.map(m=>` ${m.label} |`).join('')}\n|---|-----------|${MODELS.map(()=>`:---:|`).join('')}\n`;
+  rows.forEach((r,i)=>md+=`| ${i+1} | ${r.name} |${MODELS.map(m=>` ${pct(r.modelData[m.key].wer)} |`).join('')}\n`);
   md+=`\n### CER per Recording\n\n`;
-  md+=`| # | Recording |${MODELS.map(m=>` ${m.label} CER |`).join('')}\n`;
-  md+=`|---|-----------|${MODELS.map(()=>`:----------:|`).join('')}\n`;
-  rows.forEach((r,i)=>{
-    md+=`| ${i+1} | ${r.name} |${MODELS.map(m=>` ${pct(r.modelData[m.key].cer)} |`).join('')}\n`;
-  });
+  md+=`| # | Recording |${MODELS.map(m=>` ${m.label} |`).join('')}\n|---|-----------|${MODELS.map(()=>`:---:|`).join('')}\n`;
+  rows.forEach((r,i)=>md+=`| ${i+1} | ${r.name} |${MODELS.map(m=>` ${pct(r.modelData[m.key].cer)} |`).join('')}\n`);
   md+=`\n---\n\n`;
 
-  // ── Model-by-Model ──
   md+=`## 4. Model-by-Model Analysis\n\n`;
   MODELS.forEach(m=>{
     const wers=rows.map(r=>r.modelData[m.key].wer);
     const cers=rows.map(r=>r.modelData[m.key].cer);
-    const mw=median(wers), mc=median(cers);
-    const best=Math.min(...wers), worst=Math.max(...wers);
-    const bestRec=rows[wers.indexOf(best)]?.name||'—';
-    const worstRec=rows[wers.indexOf(worst)]?.name||'—';
-    const {g,t}=wLabel(mw);
-    md+=`### ${m.label}\n\n`;
-    md+=`- **Median WER:** ${pct(mw)} (Grade ${g} — ${t})\n`;
-    md+=`- **Median CER:** ${pct(mc)}\n`;
-    md+=`- **Best recording:** ${bestRec} — ${pct(best)} WER\n`;
-    md+=`- **Worst recording:** ${worstRec} — ${pct(worst)} WER\n`;
+    const mw=median(wers),mc=median(cers);
+    const best=Math.min(...wers),worst=Math.max(...wers);
+    const{g,t}=wLabel(mw);
+    md+=`### ${m.label}\n\n- **Median WER:** ${pct(mw)} — Grade ${g} (${t})\n- **Median CER:** ${pct(mc)}\n`;
+    md+=`- **Best:** ${rows[wers.indexOf(best)]?.name} — ${pct(best)}\n`;
+    md+=`- **Worst:** ${rows[wers.indexOf(worst)]?.name} — ${pct(worst)}\n`;
     if(isGemini(m.label)){
       const costs=rows.map(r=>r.modelData[m.key].cost).filter(Boolean);
-      const totAMD=costs.reduce((s,c)=>s+c.amd,0);
-      md+=`- **Total cost (this dataset):** ${totAMD.toFixed(2)} ֏\n`;
+      md+=`- **Total cost:** ${costs.reduce((s,c)=>s+c.amd,0).toFixed(2)} ֏\n`;
     }
     md+=`\n`;
   });
   md+=`---\n\n`;
 
-  // ── Cost ──
   const gemModels=MODELS.filter(m=>isGemini(m.label));
   if(gemModels.length){
-    md+=`## 5. Cost Analysis\n\n`;
-    md+=`### Gemini Pricing\n\n`;
-    md+=`Gemini Flash charges for **audio input** (duration × ${GEM_TOK_S} tokens/sec × $${GEM_IN_USD}/1M) and **text output** (word count × ${GEM_TOK_W} tokens/word × $${GEM_OUT_USD}/1M).\n\n`;
-    md+=`Current exchange rate: **${rate} AMD/USD**\n\n`;
-    md+=`### Cost Breakdown\n\n`;
-    md+=`| Recording | Duration |${gemModels.map(m=>` ${m.label} AMD |`).join('')}\n`;
-    md+=`|-----------|----------|${gemModels.map(()=>`:----------:|`).join('')}\n`;
-    rows.forEach(r=>{
-      md+=`| ${r.name} | ${fmtDur(r.durSec)} |${gemModels.map(m=>{const c=r.modelData[m.key].cost;return c?` ${c.amd} ֏ |`:' — |';}).join('')}\n`;
-    });
+    md+=`## 5. Cost Analysis\n\nGemini: $${GEM_IN_USD}/1M audio input (${GEM_TOK_S} tok/s) + $${GEM_OUT_USD}/1M output (${GEM_TOK_W} tok/word). Rate: ${rate} AMD/USD.\n\n`;
+    md+=`| Recording | Duration |${gemModels.map(m=>` ${m.label} |`).join('')}\n|-----------|----------|${gemModels.map(()=>`:---:|`).join('')}\n`;
+    rows.forEach(r=>md+=`| ${r.name} | ${fmtDur(r.durSec)} |${gemModels.map(m=>{const c=r.modelData[m.key].cost;return c?` ${c.amd} ֏ |`:' — |';}).join('')}\n`);
     md+=`\n### Monthly Projections\n\n`;
     gemModels.forEach(m=>{
       const costs=rows.map(r=>r.modelData[m.key].cost).filter(Boolean);
-      if(!costs.length) return;
-      const avgAMD=costs.reduce((s,c)=>s+c.amd,0)/costs.length;
-      md+=`**${m.label}** — avg ${avgAMD.toFixed(4)} ֏/recording\n\n`;
-      md+=`| Volume/month | Est. Cost |\n|:------------:|:---------:|\n`;
-      [100,500,1000,5000].forEach(v=>md+=`| ${v.toLocaleString()} recordings | ${(v*avgAMD).toFixed(0)} ֏ |\n`);
+      if(!costs.length)return;
+      const avg=costs.reduce((s,c)=>s+c.amd,0)/costs.length;
+      md+=`**${m.label}** avg ${avg.toFixed(4)} ֏/recording\n\n| Volume | Est. Cost |\n|:------:|:---------:|\n`;
+      [100,500,1000,5000].forEach(v=>md+=`| ${v.toLocaleString()} | ${(v*avg).toFixed(0)} ֏ |\n`);
       md+=`\n`;
     });
     md+=`---\n\n`;
   } else {
-    md+=`## 5. Cost Analysis\n\nNo Gemini models detected — cost analysis not applicable.\n\n---\n\n`;
+    md+=`## 5. Cost Analysis\n\nNo Gemini models detected.\n\n---\n\n`;
   }
 
-  // ── Recommendations ──
   md+=`## 6. Recommendations\n\n`;
-  md+=`> Based on median WER across ${rows.length} recordings:\n\n`;
-  ranked.forEach((x,i)=>{
-    const {g,t}=wLabel(x.med);
-    md+=`**${i+1}. ${x.m.label}** — ${pct(x.med)} median WER (Grade ${g} — ${t})\n\n`;
-  });
-  md+=`\n### Decision Matrix\n\n`;
-  md+=`| Criterion | Best Model |\n|-----------|:----------:|\n`;
-  md+=`| Lowest WER | ${ranked[0].m.label} |\n`;
-  md+=`| Lowest CER | ${[...MODELS].sort((a,b)=>median(rows.map(r=>r.modelData[a.key].cer))-median(rows.map(r=>r.modelData[b.key].cer)))[0].label} |\n`;
-  if(gemModels.length) md+=`| Lowest API Cost | ${gemModels.map(m=>({m,tot:rows.map(r=>r.modelData[m.key].cost?.amd||0).reduce((s,v)=>s+v,0)})).sort((a,b)=>a.tot-b.tot)[0].m.label} |\n`;
+  ranked.forEach((x,i)=>{const{g,t}=wLabel(x.med);md+=`**${i+1}. ${x.m.label}** — ${pct(x.med)} WER, Grade ${g} (${t})\n\n`;});
   md+=`\n---\n\n`;
 
-  // ── Per-Recording Details ──
-  md+=`## 7. Per-Recording Details\n\n`;
-  md+=`> **Diff legend:** ~~strikethrough~~ = omission, \`<mark>highlight</mark>\` = hallucination, normal = correct\n\n`;
+  md+=`## 7. Per-Recording Details\n\n> ~~strikethrough~~ = omission · \`<mark>highlight</mark>\` = hallucination\n\n`;
   rows.forEach((r,i)=>{
     md+=`<details>\n<summary><b>${i+1}. ${r.name}</b>`;
-    MODELS.forEach(m=>md+=` · ${m.label}: ${pct(r.modelData[m.key].wer)} WER`);
-    md+=`</summary>\n\n`;
-    md+=`**Duration:** ${fmtDur(r.durSec)}  \n\n`;
-    md+=`**OG TEXT (Ground Truth):**\n> ${(r.ogRaw||'—').replace(/\n/g,'\n> ')}\n\n`;
+    MODELS.forEach(m=>md+=` · ${m.label}: ${pct(r.modelData[m.key].wer)}`);
+    md+=`</summary>\n\n**Duration:** ${fmtDur(r.durSec)}\n\n**OG TEXT:**\n> ${(r.ogRaw||'—').replace(/\n/g,'\n> ')}\n\n`;
     MODELS.forEach(m=>{
       const d=r.modelData[m.key];
       const ops=buildOps(r.ogNorm,d.norm);
       md+=`**${m.label}** — WER ${pct(d.wer)} / CER ${pct(d.cer)}`;
-      if(d.cost) md+=` / ${d.cost.amd} ֏`;
+      if(d.cost)md+=` / ${d.cost.amd} ֏`;
       md+=`\n\n${opsMDNotion(ops)}\n\n`;
     });
     md+=`</details>\n\n`;
   });
 
-  // ── Glossary ──
   md+=`---\n\n## 8. Glossary\n\n`;
-  md+=`**WER (Word Error Rate)** — The percentage of words in the reference transcript that a model got wrong, counting substitutions, deletions, and insertions.\n\n`;
-  md+=`**CER (Character Error Rate)** — Same as WER but measured at the character level. More sensitive to small spelling differences.\n\n`;
-  md+=`**Substitution** — A word in the reference was replaced by a different word in the hypothesis.\n\n`;
-  md+=`**Deletion** — A word present in the reference was not produced by the model.\n\n`;
-  md+=`**Insertion (Hallucination)** — The model produced a word that does not exist in the reference.\n\n`;
-  md+=`**OG TEXT** — The manually verified ground-truth transcript used as the reference for all comparisons.\n\n`;
-  md+=`**Diarization** — Speaker labeling (e.g. "Speaker 1 (00:00–01:30)"). Stripped before analysis.\n\n`;
-  md+=`**Token** — The unit Gemini uses for billing. Audio: ~${GEM_TOK_S} tokens/second. Output text: ~${GEM_TOK_W} tokens/word.\n\n`;
-  md+=`**AMD (Armenian Dram)** — Local currency. Costs are converted from USD at the configured rate.\n\n`;
-  md+=`**Agglutinative language** — Armenian attaches many suffixes to root words, making CER a richer signal than WER alone.\n\n`;
+  md+=`**WER** — Word Error Rate: (substitutions + deletions + insertions) ÷ reference words.\n\n**CER** — Character Error Rate: same as WER but at character level.\n\n**Substitution** — Wrong word produced instead of reference word.\n\n**Deletion** — Reference word missing from output.\n\n**Insertion / Hallucination** — Word produced that doesn't exist in reference.\n\n**OG TEXT** — Manually verified ground-truth transcript.\n\n**Diarization** — Speaker labels (e.g. "Speaker 1 (00:00–01:30)") — stripped before analysis.\n\n**Token** — Gemini billing unit: ~${GEM_TOK_S} tok/sec audio, ~${GEM_TOK_W} tok/word output.\n\n**AMD** — Armenian Dram. Converted from USD at configured rate.\n\n**Agglutinative** — Armenian joins many suffixes onto roots, making CER a richer signal than WER.\n\n`;
 
   const blob=new Blob([md],{type:'text/markdown;charset=utf-8'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download=`stt-comparison-report-${new Date().toISOString().slice(0,10)}.md`;
+  a.download=`stt-report-${new Date().toISOString().slice(0,10)}.md`;
   a.click();
 }
 </script>
