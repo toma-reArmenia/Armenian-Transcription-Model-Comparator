@@ -233,7 +233,7 @@ const MODEL_DEFS = {
   'gemini_flash_prev':{ label: 'Gemini 3 Flash Preview',    color: '#22c55e', cost: '~$0.60/hr*' },
   'gemini_sp':        { label: 'Gemini + System Prompt',    color: '#06b6d4', cost: '~$0.60/hr*' },
   'talk_regular':     { label: 'Talk to Edit Regular',      color: '#a855f7', cost: 'Free' },
-  'gemini_flash':     { label: 'Gemini 3.5 Flash',          color: '#ef4444', cost: '~$0.60/hr*' },
+  'gemini_flash':     { label: 'Gemini 3.5 Flash Preview',   color: '#ef4444', cost: '~$0.60/hr*' },
 };
 
 // ══════════════════════════════════════════════
@@ -305,7 +305,7 @@ function showMappingUI() {
     { key: 'gemini_flash_prev', label: '🤖 Gemini 3 Flash Preview', hint: 'Model transcription column' },
     { key: 'gemini_sp', label: '🤖 Gemini + System Prompt', hint: 'Model transcription column' },
     { key: 'talk_regular', label: '🤖 Talk to Edit Regular', hint: 'Model transcription column' },
-    { key: 'gemini_flash', label: '🤖 Gemini 3.5 Flash', hint: 'Model transcription column' },
+    { key: 'gemini_flash', label: '🤖 Gemini 3.5 Flash Preview', hint: 'Model transcription column' },
   ];
 
   const opts = ['— Not in CSV —', ...csvHeaders];
@@ -328,12 +328,12 @@ function autoDetect(key, headers) {
   const patterns = {
     og: [/^og$/i, /original/i, /ground.?truth/i, /reference/i, /og.?text/i, /original.?text/i],
     skip_files: [/file/i, /media/i, /record/i, /audio/i],
-    high_speech: [/high.?speech/i, /highspeech/i],
+    high_speech: [/hispeech/i, /hi.?speech/i, /high.?speech/i, /highspeech/i],
     talk_prod: [/talk.*prod/i, /talk.*edit.*prod/i, /production/i],
-    gemini_flash_prev: [/gemini.*flash.*prev/i, /gemini.*prev/i, /flash.*prev/i, /preview/i],
+    gemini_flash_prev: [/gemini.*3\s*flash.*prev/i, /gemini.*flash.*prev(?!.*3\.5)/i, /gemini.*3\s*prev/i],
     gemini_sp: [/gemini.*sp\b/i, /gemini.*system/i, /system.?prompt/i, /with.?sp/i],
-    talk_regular: [/talk.*regular/i, /talk.*edit.*reg/i, /regular/i, /free/i],
-    gemini_flash: [/gemini.*1\.?5.*flash(?!.*prev)/i, /^gemini.?flash$/i, /gemini.?1\.5.?flash$/i],
+    talk_regular: [/talk.*regular/i, /talk.*edit.*reg/i, /regular/i],
+    gemini_flash: [/gemini.*3\.5/i, /3\.5.*flash/i, /gemini.*flash(?!.*prev)/i, /^gemini.?flash$/i],
   };
   const ps = patterns[key] || [];
   for (const h of headers) {
@@ -568,7 +568,7 @@ function renderCostTable(stats, keys) {
         <td>${fmt(s.avgCER)}</td>
       </tr>`;
     }).join('')}</tbody></table>
-    <p style="font-size:.7rem;color:var(--muted);margin-top:10px">*Gemini 1.5 Flash audio pricing ≈ $0.0001875/s ≈ ~$0.675/hr. Exchange rate: ~400 AMD/$1.</p>`;
+    <p style="font-size:.7rem;color:var(--muted);margin-top:10px">*Gemini 3 / 3.5 Flash Preview audio pricing ≈ $0.0001875/s ≈ ~$0.675/hr. Exchange rate: ~400 AMD/$1.</p>`;
 }
 
 // ── Charts ─────────────────────────────────────
@@ -933,9 +933,9 @@ function generateReport() {
   md += `|-------|-------:|-------:|-------|\n`;
   md += `| Talk to Edit Regular | 0 AMD | $0 | Free tier |\n`;
   md += `| Hispeech | — | — | Custom — contact vendor |\n`;
-  md += `| Gemini 1.5 Flash Preview | ~240 AMD | ~$0.60 | Audio: $0.0001875/sec |\n`;
+  md += `| Gemini 3 Flash Preview | ~240 AMD | ~$0.60 | Audio: $0.0001875/sec |\n`;
   md += `| Gemini + System Prompt | ~240 AMD | ~$0.60 | Same as Flash + token overhead |\n`;
-  md += `| Gemini 3.5 Flash | ~240 AMD | ~$0.60 | Audio: $0.0001875/sec |\n`;
+  md += `| Gemini 3.5 Flash Preview | ~240 AMD | ~$0.60 | Audio: $0.0001875/sec |\n`;
   md += `| Talk to Edit Production | 600 AMD | ~$1.50 | 600 AMD/hr fixed |\n\n`;
 
   md += `### Accuracy-per-Cost Efficiency\n\n`;
