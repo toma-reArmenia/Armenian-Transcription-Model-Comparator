@@ -487,7 +487,7 @@ function runAnalysis() {
       const b1 = bleu1(ref, hyp);
       models[k] = { cer, wer, bleu1: b1, charAcc: cer != null ? Math.max(0, 100 - cer) : null, ref, hyp, rawRef, rawHyp };
     });
-    return { idx: i, ref, models };
+    return { idx: i, ref, rawRef, models };
   });
 
   // Aggregate per model
@@ -664,35 +664,59 @@ function renderCharts(stats, keys) {
 }
 
 // ── Word-level diff (LCS) ──────────────────────
-function computeWDiff(rw, hw, cap = 120) {
-  const r = rw.slice(0, cap), h = hw.slice(0, cap);
-  const m = r.length, n = h.length;
-  const dp = Array.from({ length: m + 1 }, () => new Int16Array(n + 1));
+// No length cap — process the full transcription. LCS is O(m*n) so very long
+// segments (>10k words) may take a moment, but real ASR segments are short.
+function computeWDiff(rw, hw) {
+  const m = rw.length, n = hw.length;
+  const dp = Array.from({ length: m + 1 }, () => new Int32Array(n + 1));
   for (let i = 1; i <= m; i++)
     for (let j = 1; j <= n; j++)
-      dp[i][j] = r[i-1] === h[j-1] ? dp[i-1][j-1] + 1 : Math.max(dp[i-1][j], dp[i][j-1]);
+      dp[i][j] = rw[i-1] === hw[j-1] ? dp[i-1][j-1] + 1 : Math.max(dp[i-1][j], dp[i][j-1]);
   const ops = []; let i = m, j = n;
   while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && r[i-1] === h[j-1]) { ops.unshift({ t: '=', w: r[i-1] }); i--; j--; }
-    else if (j > 0 && (i === 0 || dp[i][j-1] >= dp[i-1][j])) { ops.unshift({ t: '+', w: h[j-1] }); j--; }
-    else { ops.unshift({ t: '-', w: r[i-1] }); i--; }
+    if (i > 0 && j > 0 && rw[i-1] === hw[j-1]) { ops.unshift({ t: '=', w: rw[i-1] }); i--; j--; }
+    else if (j > 0 && (i === 0 || dp[i][j-1] >= dp[i-1][j])) { ops.unshift({ t: '+', w: hw[j-1] }); j--; }
+    else { ops.unshift({ t: '-', w: rw[i-1] }); i--; }
   }
-  return { ops, truncated: rw.length > cap || hw.length > cap };
+  return { ops };
 }
 
 function renderDiffHtml(ref, hyp) {
   if (!ref && !hyp) return '<em style="opacity:.5">(empty)</em>';
   const rw = (ref || '').split(/\s+/).filter(Boolean);
   const hw = (hyp || '').split(/\s+/).filter(Boolean);
-  const { ops, truncated } = computeWDiff(rw, hw);
-  let html = ops.map(o => {
+  const { ops } = computeWDiff(rw, hw);
+  return ops.map(o => {
     const w = escHtml(o.w);
     if (o.t === '=') return w;
     if (o.t === '-') return `<span class="dw-del">${w}</span>`;
     return `<span class="dw-ins">${w}</span>`;
   }).join(' ');
-  if (truncated) html += ' <em style="font-size:.7rem;opacity:.5">[…truncated]</em>';
-  return html;
+}
+
+// Renders raw transcription as a readable dialogue: speaker labels bold,
+// timestamps in muted monospace, line breaks preserved. Used for the
+// "raw view" alongside the cleaned diff so reviewers see who said what + when.
+function formatDialogueHtml(raw) {
+  if (!raw) return '<em style="opacity:.5">(empty)</em>';
+  const speakerRe = /^(speaker[ _]?\d+|S\d+|[\p{L}][\p{L}_'-]{0,30})\s*:\s+(.+)$/iu;
+  const arrowTsRe = /^\s*(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})\s*$/;
+  const bareTsRe = /^\s*\d{1,2}:\d{2}(?::\d{2})?\s*$/;
+  const cueNumRe = /^\s*\d+\s*$/;
+
+  return String(raw).split(/\r?\n/).map(line => {
+    if (!line.trim()) return '';
+    let m;
+    if ((m = line.match(arrowTsRe)))
+      return `<div style="color:#94a3b8;font-size:.78rem;font-family:'SF Mono',Menlo,monospace;margin:6px 0 2px">⏱ ${m[1]} → ${m[2]}</div>`;
+    if (bareTsRe.test(line))
+      return `<div style="color:#94a3b8;font-size:.78rem;font-family:'SF Mono',Menlo,monospace;margin:6px 0 2px">⏱ ${escHtml(line.trim())}</div>`;
+    if (cueNumRe.test(line))
+      return '';
+    if ((m = line.match(speakerRe)))
+      return `<div style="margin:4px 0;line-height:1.5"><strong style="color:#6366f1">${escHtml(m[1])}:</strong> ${escHtml(m[2])}</div>`;
+    return `<div style="margin:4px 0;line-height:1.5">${escHtml(line)}</div>`;
+  }).join('');
 }
 
 // ── Row details ────────────────────────────────
@@ -723,7 +747,10 @@ function renderRowDetails(rows, modelKeys) {
             <span class="metric-pill">Char Acc ${m.charAcc != null ? m.charAcc.toFixed(1) + '%' : '—'}</span>
             <span class="metric-pill">BLEU-1 ${m.bleu1 != null ? m.bleu1.toFixed(1) + '%' : '—'}</span>
           </div>
-          <div class="diff-block" style="margin-top:8px;font-size:.78rem;white-space:normal">${renderDiffHtml(row.ref, m.hyp)}</div>
+          <div style="font-size:.7rem;color:var(--muted);margin-top:10px;text-transform:uppercase;letter-spacing:.04em">Raw output</div>
+          <div class="diff-block" style="margin-top:4px;font-size:.82rem;white-space:normal;line-height:1.4">${formatDialogueHtml(m.rawHyp)}</div>
+          <div style="font-size:.7rem;color:var(--muted);margin-top:10px;text-transform:uppercase;letter-spacing:.04em">Cleaned word-level diff</div>
+          <div class="diff-block" style="margin-top:4px;font-size:.82rem;white-space:normal">${renderDiffHtml(row.ref, m.hyp)}</div>
         </div>
       </div>`;
     }).join('');
@@ -742,7 +769,9 @@ function renderRowDetails(rows, modelKeys) {
           <span>plain = correct</span>
         </div>
         <div style="margin-bottom:14px">
-          <div style="font-size:.75rem;color:var(--muted);margin-bottom:4px">REFERENCE (cleaned)</div>
+          <div style="font-size:.7rem;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em">Reference (raw, with speakers + timestamps)</div>
+          <div class="diff-block diff-ref" style="white-space:normal;line-height:1.4">${formatDialogueHtml(row.rawRef ?? rowRef)}</div>
+          <div style="font-size:.7rem;color:var(--muted);margin:10px 0 4px;text-transform:uppercase;letter-spacing:.04em">Reference (cleaned, used for scoring)</div>
           <div class="diff-block diff-ref" style="white-space:normal">${escHtml(rowRef)}</div>
         </div>
         ${rowsHtml}
@@ -798,19 +827,20 @@ function hEsc(s) {
 }
 function fmtPct(v, dec = 1) { return v == null ? '—' : v.toFixed(dec) + '%'; }
 
-function rptDiff(rw, hw, cap = 150) {
-  const r = rw.slice(0, cap), h = hw.slice(0, cap);
-  const m = r.length, n = h.length;
-  const dp = Array.from({ length: m + 1 }, () => new Int16Array(n + 1));
+// No length cap — full diff every time (LCS is O(m*n) but transcription
+// segments are typically short).
+function rptDiff(rw, hw) {
+  const m = rw.length, n = hw.length;
+  const dp = Array.from({ length: m + 1 }, () => new Int32Array(n + 1));
   for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++)
-    dp[i][j] = r[i-1] === h[j-1] ? dp[i-1][j-1] + 1 : Math.max(dp[i-1][j], dp[i][j-1]);
+    dp[i][j] = rw[i-1] === hw[j-1] ? dp[i-1][j-1] + 1 : Math.max(dp[i-1][j], dp[i][j-1]);
   const ops = []; let i = m, j = n;
   while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && r[i-1] === h[j-1]) { ops.unshift({ t: '=', w: r[i-1] }); i--; j--; }
-    else if (j > 0 && (i === 0 || dp[i][j-1] >= dp[i-1][j])) { ops.unshift({ t: '+', w: h[j-1] }); j--; }
-    else { ops.unshift({ t: '-', w: r[i-1] }); i--; }
+    if (i > 0 && j > 0 && rw[i-1] === hw[j-1]) { ops.unshift({ t: '=', w: rw[i-1] }); i--; j--; }
+    else if (j > 0 && (i === 0 || dp[i][j-1] >= dp[i-1][j])) { ops.unshift({ t: '+', w: hw[j-1] }); j--; }
+    else { ops.unshift({ t: '-', w: rw[i-1] }); i--; }
   }
-  return { ops, tr: rw.length > cap || hw.length > cap };
+  return { ops };
 }
 
 // HTML diff with inline-styled spans (highlights survive Notion HTML import)
@@ -818,14 +848,39 @@ function diffHtml(ref, hyp) {
   const rw = (ref || '').split(/\s+/).filter(Boolean);
   const hw = (hyp || '').split(/\s+/).filter(Boolean);
   if (!rw.length && !hw.length) return '<em style="opacity:.6">(empty)</em>';
-  const { ops, tr } = rptDiff(rw, hw);
-  const out = ops.map(o => {
+  const { ops } = rptDiff(rw, hw);
+  return ops.map(o => {
     const w = hEsc(o.w);
     if (o.t === '=') return w;
     if (o.t === '-') return '<span class="del" style="background:#fee2e2;color:#b91c1c;text-decoration:line-through;padding:1px 5px;border-radius:3px;font-style:italic;">' + w + '</span>';
     return '<mark class="ins" style="background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;font-weight:700;">' + w + '</mark>';
   }).join(' ');
-  return out + (tr ? ' <em style="font-size:.75rem;opacity:.6">[…truncated at 150 words]</em>' : '');
+}
+
+// Report-side dialogue renderer — same logic as on-page version but with inline
+// styles so it survives Notion HTML import and email forwarding.
+function reportDialogueHtml(raw) {
+  if (!raw) return '<em style="opacity:.5">(empty)</em>';
+  const speakerRe = /^(speaker[ _]?\d+|S\d+|[\p{L}][\p{L}_'-]{0,30})\s*:\s+(.+)$/iu;
+  const arrowTsRe = /^\s*(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})\s*$/;
+  const bareTsRe = /^\s*\d{1,2}:\d{2}(?::\d{2})?\s*$/;
+  const cueNumRe = /^\s*\d+\s*$/;
+  const tsStyle = "color:#94a3b8;font-size:.78rem;font-family:'SF Mono',Menlo,Consolas,monospace;margin:6px 0 2px";
+  const lineStyle = "margin:4px 0;line-height:1.55";
+
+  return String(raw).split(/\r?\n/).map(line => {
+    if (!line.trim()) return '';
+    let m;
+    if ((m = line.match(arrowTsRe)))
+      return '<div style="' + tsStyle + '">⏱ ' + m[1] + ' → ' + m[2] + '</div>';
+    if (bareTsRe.test(line))
+      return '<div style="' + tsStyle + '">⏱ ' + hEsc(line.trim()) + '</div>';
+    if (cueNumRe.test(line))
+      return '';
+    if ((m = line.match(speakerRe)))
+      return '<div style="' + lineStyle + '"><strong style="color:#6366f1">' + hEsc(m[1]) + ':</strong> ' + hEsc(m[2]) + '</div>';
+    return '<div style="' + lineStyle + '">' + hEsc(line) + '</div>';
+  }).join('');
 }
 
 // ══════════════════════════════════════════════
@@ -1135,15 +1190,25 @@ function generateReport() {
       })
     );
 
-    h += '<p style="font-size:.85rem;color:#64748b;margin:14px 0 4px"><strong>📝 REFERENCE (cleaned)</strong></p>';
-    h += '<div style="' + S.refBlock + '">' + hEsc(row.ref || '(empty)') + '</div>';
+    // Reference — raw (dialogue-formatted) + cleaned (scoring view)
+    h += '<p style="font-size:.85rem;color:#64748b;margin:18px 0 4px"><strong>📝 REFERENCE — raw</strong> <em style="font-weight:400">(speakers + timestamps preserved)</em></p>';
+    h += '<div style="' + S.refBlock + '">' + reportDialogueHtml(row.rawRef) + '</div>';
+    h += '<p style="font-size:.78rem;color:#94a3b8;margin:10px 0 4px"><strong>Reference — cleaned</strong> (used for scoring)</p>';
+    h += '<div style="background:#f8fafc;border:1px solid #e2e8f0;padding:8px 12px;border-radius:4px;font-size:.85rem;color:#475569">' + hEsc(row.ref || '(empty)') + '</div>';
 
-    h += '<p style="font-size:.85rem;color:#64748b;margin:14px 0 4px"><strong>🔍 WORD-LEVEL DIFFS</strong></p>';
+    // Each model: raw dialogue view + cleaned word-level diff
+    h += '<p style="font-size:.85rem;color:#64748b;margin:20px 0 4px"><strong>🤖 MODEL OUTPUTS</strong> <em style="font-weight:400">(raw view + cleaned diff, full text — no truncation)</em></p>';
     sorted.forEach(k => {
       const m = row.models[k];
       if (!m) return;
-      h += '<p style="margin:10px 0 4px;font-size:.88rem;font-weight:700;color:' + (MODEL_DEFS[k]?.color || '#1e293b') + '">' + hEsc(MODEL_DEFS[k]?.label || k) + '</p>';
+      const color = MODEL_DEFS[k]?.color || '#1e293b';
+      h += '<div style="margin:14px 0;padding:12px 14px;border:1px solid #e2e8f0;border-left:4px solid ' + color + ';border-radius:6px;background:#ffffff">';
+      h += '<div style="font-size:.95rem;font-weight:700;color:' + color + ';margin-bottom:8px">' + hEsc(MODEL_DEFS[k]?.label || k) + '</div>';
+      h += '<div style="font-size:.72rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Raw output</div>';
+      h += '<div style="background:#fafafa;border:1px solid #f1f5f9;padding:10px 14px;border-radius:4px;font-size:.9rem">' + reportDialogueHtml(m.rawHyp) + '</div>';
+      h += '<div style="font-size:.72rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em;margin:12px 0 4px">Cleaned word-level diff</div>';
       h += '<div style="' + S.diffBlock + '">' + diffHtml(row.ref, m.hyp) + '</div>';
+      h += '</div>';
     });
 
     h += '</div></details>';
