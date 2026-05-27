@@ -694,28 +694,142 @@ function renderDiffHtml(ref, hyp) {
   }).join(' ');
 }
 
-// Renders raw transcription as a readable dialogue: speaker labels bold,
-// timestamps in muted monospace, line breaks preserved. Used for the
-// "raw view" alongside the cleaned diff so reviewers see who said what + when.
-function formatDialogueHtml(raw) {
-  if (!raw) return '<em style="opacity:.5">(empty)</em>';
-  const speakerRe = /^(speaker[ _]?\d+|S\d+|[\p{L}][\p{L}_'-]{0,30})\s*:\s+(.+)$/iu;
-  const arrowTsRe = /^\s*(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})\s*$/;
-  const bareTsRe = /^\s*\d{1,2}:\d{2}(?::\d{2})?\s*$/;
-  const cueNumRe = /^\s*\d+\s*$/;
+// ─────────────────────────────────────────────────────────────────
+//  Highlighted dialogue rendering
+//
+//  Goal: keep the raw markdown/dialogue formatting (timestamps,
+//  speakers, line breaks) AND paint diff highlights *on* the same
+//  text — not in a separate "cleaned" block underneath.
+//
+//  Strategy:
+//    1. tokenizeForHighlight(raw) — split raw text into structured
+//       lines (timestamp / speaker prefix + word/punct/space parts).
+//       Speaker labels and timestamps pass through unchanged.
+//    2. collectWords(tokens) — flat list of every word token (with
+//       normalised lowercase form) so we can run an LCS diff on
+//       them, ignoring punctuation/casing.
+//    3. computeMarks(refWords, hypWords) — LCS-based diff. Returns
+//       per-word marks for ref ('=' or '-') and hyp ('=' or '+').
+//    4. renderWithMarks(tokens, marks, side) — re-render the same
+//       structured text, applying highlight CSS to the marked
+//       words. Punctuation, speakers, timestamps untouched.
+// ─────────────────────────────────────────────────────────────────
 
+const _SPEAKER_RE = /^(speaker[ _]?\d+|S\d+|[\p{L}][\p{L}_'-]{0,30})\s*:\s+(.*)$/iu;
+const _ARROW_TS_RE = /^\s*(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})\s*$/;
+const _BARE_TS_RE  = /^\s*(\d{1,2}:\d{2}(?::\d{2})?)\s*$/;
+const _CUE_NUM_RE  = /^\s*\d+\s*$/;
+const _TOKEN_RE    = /[\p{L}\p{N}]+|[^\p{L}\p{N}\s]+|\s+/gu;
+
+const _INLINE_TS_RE = /^\s*[\[(]\s*(\d{1,2}:\d{2}(?::\d{2})?(?:[,.]\d{1,3})?)\s*[\])]\s*(.*)$/;
+
+function tokenizeForHighlight(raw) {
+  if (!raw) return [];
   return String(raw).split(/\r?\n/).map(line => {
-    if (!line.trim()) return '';
+    if (!line.trim()) return { kind: 'empty' };
     let m;
-    if ((m = line.match(arrowTsRe)))
-      return `<div style="color:#94a3b8;font-size:.78rem;font-family:'SF Mono',Menlo,monospace;margin:6px 0 2px">⏱ ${m[1]} → ${m[2]}</div>`;
-    if (bareTsRe.test(line))
-      return `<div style="color:#94a3b8;font-size:.78rem;font-family:'SF Mono',Menlo,monospace;margin:6px 0 2px">⏱ ${escHtml(line.trim())}</div>`;
-    if (cueNumRe.test(line))
-      return '';
-    if ((m = line.match(speakerRe)))
-      return `<div style="margin:4px 0;line-height:1.5"><strong style="color:#6366f1">${escHtml(m[1])}:</strong> ${escHtml(m[2])}</div>`;
-    return `<div style="margin:4px 0;line-height:1.5">${escHtml(line)}</div>`;
+    if ((m = line.match(_ARROW_TS_RE))) return { kind: 'arrow_ts', start: m[1], end: m[2] };
+    if ((m = line.match(_BARE_TS_RE)))  return { kind: 'bare_ts', text: m[1] };
+    if (_CUE_NUM_RE.test(line))         return { kind: 'cue' };
+
+    // Peel off a leading bracketed timestamp like "[00:00:01]" so it shows
+    // as a timestamp tag rather than getting tokenized as bare word/punct
+    // (which would otherwise appear as "extras" in the diff).
+    let leadingTs = null;
+    if ((m = line.match(_INLINE_TS_RE))) {
+      leadingTs = m[1];
+      line = m[2];
+      if (!line.trim()) return { kind: 'bare_ts', text: leadingTs };
+    }
+
+    let speaker = null;
+    let body = line;
+    if ((m = line.match(_SPEAKER_RE))) {
+      speaker = m[1];
+      body = m[2];
+    }
+    const parts = [];
+    _TOKEN_RE.lastIndex = 0;
+    let t;
+    while ((t = _TOKEN_RE.exec(body)) !== null) {
+      const tok = t[0];
+      if (/^[\p{L}\p{N}]+$/u.test(tok)) {
+        let norm;
+        try { norm = tok.toLocaleLowerCase('hy-AM'); } catch { norm = tok.toLowerCase(); }
+        parts.push({ kind: 'word', text: tok, norm });
+      } else if (/^\s+$/.test(tok)) {
+        parts.push({ kind: 'space', text: tok });
+      } else {
+        parts.push({ kind: 'punct', text: tok });
+      }
+    }
+    return { kind: 'text', leadingTs, speaker, parts };
+  });
+}
+
+function collectWords(tokens) {
+  const out = [];
+  tokens.forEach(line => {
+    if (line.kind !== 'text') return;
+    line.parts.forEach(p => { if (p.kind === 'word') out.push(p.norm); });
+  });
+  return out;
+}
+
+// Run LCS over normalised word arrays, return per-side marks.
+//   refMarks[i] is '=' or '-' (deleted from ref → model missed it)
+//   hypMarks[j] is '=' or '+' (inserted in hyp → model added it)
+function computeMarks(refWords, hypWords) {
+  const { ops } = computeWDiff(refWords, hypWords);
+  const refMarks = [], hypMarks = [];
+  ops.forEach(op => {
+    if (op.t === '=') { refMarks.push('='); hypMarks.push('='); }
+    else if (op.t === '-') { refMarks.push('-'); }
+    else if (op.t === '+') { hypMarks.push('+'); }
+  });
+  return { refMarks, hypMarks };
+}
+
+// Render structured tokens with optional word-level highlights.
+//   marks: array of '='/'-'/'+' marks aligned with word tokens in `tokens`.
+//          Pass null to render with no highlights.
+//   side:  'ref' (highlight '-' as red strikethrough) | 'hyp' (highlight '+'
+//          as yellow mark) | null (no highlights even if marks given).
+function renderWithMarks(tokens, marks, side) {
+  if (!tokens || !tokens.length) return '<em style="opacity:.5">(empty)</em>';
+  const tsStyle   = "color:#94a3b8;font-size:.78rem;font-family:'SF Mono',Menlo,Consolas,monospace;margin:6px 0 2px";
+  const lineStyle = "margin:4px 0;line-height:1.55";
+  const delStyle  = "background:#fee2e2;color:#b91c1c;text-decoration:line-through;padding:1px 5px;border-radius:3px;font-style:italic;";
+  const insStyle  = "background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;font-weight:700;";
+  let wi = 0;
+
+  return tokens.map(line => {
+    if (line.kind === 'empty')    return '';
+    if (line.kind === 'cue')      return '';
+    if (line.kind === 'arrow_ts') return '<div style="' + tsStyle + '">⏱ ' + line.start + ' → ' + line.end + '</div>';
+    if (line.kind === 'bare_ts')  return '<div style="' + tsStyle + '">⏱ ' + escHtml(line.text) + '</div>';
+
+    let inner = '';
+    if (line.leadingTs) {
+      inner += '<span style="color:#94a3b8;font-size:.78rem;font-family:\'SF Mono\',Menlo,Consolas,monospace;margin-right:6px">⏱ ' + escHtml(line.leadingTs) + '</span>';
+    }
+    if (line.speaker) {
+      inner += '<strong style="color:#6366f1">' + escHtml(line.speaker) + ':</strong> ';
+    }
+    line.parts.forEach(p => {
+      if (p.kind === 'word') {
+        const mark = marks ? marks[wi++] : null;
+        const w = escHtml(p.text);
+        if (side === 'ref' && mark === '-')      inner += '<span style="' + delStyle + '">' + w + '</span>';
+        else if (side === 'hyp' && mark === '+') inner += '<mark style="' + insStyle + '">' + w + '</mark>';
+        else                                      inner += w;
+      } else if (p.kind === 'space') {
+        inner += p.text;
+      } else if (p.kind === 'punct') {
+        inner += escHtml(p.text);
+      }
+    });
+    return '<div style="' + lineStyle + '">' + inner + '</div>';
   }).join('');
 }
 
@@ -733,10 +847,20 @@ function renderRowDetails(rows, modelKeys) {
       if (acc != null && acc > bestAcc) { bestAcc = acc; bestK = k; }
     });
 
+    // Tokenize the reference once per row — we'll re-render it for each model
+    // with model-specific "missed words" highlights painted on it.
+    const refTokens = tokenizeForHighlight(row.rawRef);
+    const refWords  = collectWords(refTokens);
+
     const rowsHtml = modelKeys.map(k => {
       const m = row.models[k];
       if (!m) return '';
       const isBest = k === bestK;
+      const hypTokens = tokenizeForHighlight(m.rawHyp);
+      const hypWords  = collectWords(hypTokens);
+      const { refMarks, hypMarks } = computeMarks(refWords, hypWords);
+      const refHtml = renderWithMarks(refTokens, refMarks, 'ref');
+      const hypHtml = renderWithMarks(hypTokens, hypMarks, 'hyp');
       return `
       <div class="model-row">
         <div class="model-name" style="color:${MODEL_DEFS[k]?.color}">${MODEL_DEFS[k]?.label || k}${isBest ? ' ✓' : ''}</div>
@@ -747,10 +871,10 @@ function renderRowDetails(rows, modelKeys) {
             <span class="metric-pill">Char Acc ${m.charAcc != null ? m.charAcc.toFixed(1) + '%' : '—'}</span>
             <span class="metric-pill">BLEU-1 ${m.bleu1 != null ? m.bleu1.toFixed(1) + '%' : '—'}</span>
           </div>
-          <div style="font-size:.7rem;color:var(--muted);margin-top:10px;text-transform:uppercase;letter-spacing:.04em">Raw output</div>
-          <div class="diff-block" style="margin-top:4px;font-size:.82rem;white-space:normal;line-height:1.4">${formatDialogueHtml(m.rawHyp)}</div>
-          <div style="font-size:.7rem;color:var(--muted);margin-top:10px;text-transform:uppercase;letter-spacing:.04em">Cleaned word-level diff</div>
-          <div class="diff-block" style="margin-top:4px;font-size:.82rem;white-space:normal">${renderDiffHtml(row.ref, m.hyp)}</div>
+          <div style="font-size:.7rem;color:var(--muted);margin-top:10px;text-transform:uppercase;letter-spacing:.04em">Reference — words this model missed in red</div>
+          <div class="diff-block diff-ref" style="margin-top:4px;font-size:.82rem;white-space:normal;line-height:1.4">${refHtml}</div>
+          <div style="font-size:.7rem;color:var(--muted);margin-top:10px;text-transform:uppercase;letter-spacing:.04em">${MODEL_DEFS[k]?.label || k} output — extras in yellow</div>
+          <div class="diff-block" style="margin-top:4px;font-size:.82rem;white-space:normal;line-height:1.4">${hypHtml}</div>
         </div>
       </div>`;
     }).join('');
@@ -763,16 +887,10 @@ function renderRowDetails(rows, modelKeys) {
       </div>
       <div class="detail-body">
         <div class="diff-legend">
-          <span>Word diff:</span>
-          <span><span class="dw-del">missed word</span> = in reference, skipped by ASR</span>
-          <span><span class="dw-ins">extra word</span> = ASR added, not in reference</span>
-          <span>plain = correct</span>
-        </div>
-        <div style="margin-bottom:14px">
-          <div style="font-size:.7rem;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em">Reference (raw, with speakers + timestamps)</div>
-          <div class="diff-block diff-ref" style="white-space:normal;line-height:1.4">${formatDialogueHtml(row.rawRef ?? rowRef)}</div>
-          <div style="font-size:.7rem;color:var(--muted);margin:10px 0 4px;text-transform:uppercase;letter-spacing:.04em">Reference (cleaned, used for scoring)</div>
-          <div class="diff-block diff-ref" style="white-space:normal">${escHtml(rowRef)}</div>
+          <span>Word diff (overlaid on the dialogue):</span>
+          <span><span class="dw-del">missed word</span> = in OG, skipped by ASR</span>
+          <span><span class="dw-ins">extra word</span> = ASR added, not in OG</span>
+          <span>plain = correct · punctuation, casing, speakers ignored</span>
         </div>
         ${rowsHtml}
       </div>
@@ -855,32 +973,6 @@ function diffHtml(ref, hyp) {
     if (o.t === '-') return '<span class="del" style="background:#fee2e2;color:#b91c1c;text-decoration:line-through;padding:1px 5px;border-radius:3px;font-style:italic;">' + w + '</span>';
     return '<mark class="ins" style="background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;font-weight:700;">' + w + '</mark>';
   }).join(' ');
-}
-
-// Report-side dialogue renderer — same logic as on-page version but with inline
-// styles so it survives Notion HTML import and email forwarding.
-function reportDialogueHtml(raw) {
-  if (!raw) return '<em style="opacity:.5">(empty)</em>';
-  const speakerRe = /^(speaker[ _]?\d+|S\d+|[\p{L}][\p{L}_'-]{0,30})\s*:\s+(.+)$/iu;
-  const arrowTsRe = /^\s*(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})\s*$/;
-  const bareTsRe = /^\s*\d{1,2}:\d{2}(?::\d{2})?\s*$/;
-  const cueNumRe = /^\s*\d+\s*$/;
-  const tsStyle = "color:#94a3b8;font-size:.78rem;font-family:'SF Mono',Menlo,Consolas,monospace;margin:6px 0 2px";
-  const lineStyle = "margin:4px 0;line-height:1.55";
-
-  return String(raw).split(/\r?\n/).map(line => {
-    if (!line.trim()) return '';
-    let m;
-    if ((m = line.match(arrowTsRe)))
-      return '<div style="' + tsStyle + '">⏱ ' + m[1] + ' → ' + m[2] + '</div>';
-    if (bareTsRe.test(line))
-      return '<div style="' + tsStyle + '">⏱ ' + hEsc(line.trim()) + '</div>';
-    if (cueNumRe.test(line))
-      return '';
-    if ((m = line.match(speakerRe)))
-      return '<div style="' + lineStyle + '"><strong style="color:#6366f1">' + hEsc(m[1]) + ':</strong> ' + hEsc(m[2]) + '</div>';
-    return '<div style="' + lineStyle + '">' + hEsc(line) + '</div>';
-  }).join('');
 }
 
 // ══════════════════════════════════════════════
@@ -1175,7 +1267,7 @@ function generateReport() {
     h += '<summary style="' + S.summary + '"><strong>Segment ' + (i + 1) + ':</strong> ' + preview + '…</summary>';
     h += '<div style="' + S.detailsBody + '">';
 
-    // Accuracy table for this segment
+    // Per-segment accuracy table
     h += tbl(
       ['Model','WER','','CER','','BLEU-1','Char Acc'],
       sorted.filter(k => row.models[k]).map(k => {
@@ -1190,24 +1282,30 @@ function generateReport() {
       })
     );
 
-    // Reference — raw (dialogue-formatted) + cleaned (scoring view)
-    h += '<p style="font-size:.85rem;color:#64748b;margin:18px 0 4px"><strong>📝 REFERENCE — raw</strong> <em style="font-weight:400">(speakers + timestamps preserved)</em></p>';
-    h += '<div style="' + S.refBlock + '">' + reportDialogueHtml(row.rawRef) + '</div>';
-    h += '<p style="font-size:.78rem;color:#94a3b8;margin:10px 0 4px"><strong>Reference — cleaned</strong> (used for scoring)</p>';
-    h += '<div style="background:#f8fafc;border:1px solid #e2e8f0;padding:8px 12px;border-radius:4px;font-size:.85rem;color:#475569">' + hEsc(row.ref || '(empty)') + '</div>';
+    // Tokenise OG once; we re-render it for each model with that model's
+    // "missed words" highlighted, alongside the model output with extras.
+    const refTokens = tokenizeForHighlight(row.rawRef);
+    const refWords  = collectWords(refTokens);
 
-    // Each model: raw dialogue view + cleaned word-level diff
-    h += '<p style="font-size:.85rem;color:#64748b;margin:20px 0 4px"><strong>🤖 MODEL OUTPUTS</strong> <em style="font-weight:400">(raw view + cleaned diff, full text — no truncation)</em></p>';
+    h += '<p style="font-size:.85rem;color:#64748b;margin:18px 0 4px"><strong>📋 OG vs MODEL OUTPUTS</strong> <em style="font-weight:400">(dialogue/markdown format preserved · highlights overlaid · full text, no truncation)</em></p>';
+
     sorted.forEach(k => {
       const m = row.models[k];
       if (!m) return;
+      const hypTokens = tokenizeForHighlight(m.rawHyp);
+      const hypWords  = collectWords(hypTokens);
+      const { refMarks, hypMarks } = computeMarks(refWords, hypWords);
       const color = MODEL_DEFS[k]?.color || '#1e293b';
-      h += '<div style="margin:14px 0;padding:12px 14px;border:1px solid #e2e8f0;border-left:4px solid ' + color + ';border-radius:6px;background:#ffffff">';
-      h += '<div style="font-size:.95rem;font-weight:700;color:' + color + ';margin-bottom:8px">' + hEsc(MODEL_DEFS[k]?.label || k) + '</div>';
-      h += '<div style="font-size:.72rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Raw output</div>';
-      h += '<div style="background:#fafafa;border:1px solid #f1f5f9;padding:10px 14px;border-radius:4px;font-size:.9rem">' + reportDialogueHtml(m.rawHyp) + '</div>';
-      h += '<div style="font-size:.72rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em;margin:12px 0 4px">Cleaned word-level diff</div>';
-      h += '<div style="' + S.diffBlock + '">' + diffHtml(row.ref, m.hyp) + '</div>';
+
+      h += '<div style="margin:14px 0;padding:14px 16px;border:1px solid #e2e8f0;border-left:4px solid ' + color + ';border-radius:6px;background:#ffffff">';
+      h += '<div style="font-size:.95rem;font-weight:700;color:' + color + ';margin-bottom:10px">' + hEsc(MODEL_DEFS[k]?.label || k) + '</div>';
+
+      h += '<div style="font-size:.72rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">📝 OG — words this model missed shown in red</div>';
+      h += '<div style="' + S.refBlock + '">' + renderWithMarks(refTokens, refMarks, 'ref') + '</div>';
+
+      h += '<div style="font-size:.72rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em;margin:12px 0 4px">🤖 ' + hEsc(MODEL_DEFS[k]?.label || k) + ' output — extras shown in yellow</div>';
+      h += '<div style="background:#fafafa;border:1px solid #f1f5f9;padding:10px 14px;border-radius:4px;font-size:.92rem">' + renderWithMarks(hypTokens, hypMarks, 'hyp') + '</div>';
+
       h += '</div>';
     });
 
