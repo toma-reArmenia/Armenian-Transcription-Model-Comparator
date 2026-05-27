@@ -390,6 +390,9 @@ function preprocessText(raw) {
   // ── 4. Case fold (so capitalization doesn't count as an error) ─
   try { t = t.toLocaleLowerCase('hy-AM'); } catch { t = t.toLowerCase(); }
 
+  // ── 4b. Armenian "ew" ligature: և (U+0587) ≡ եւ. Fold to եւ. ──
+  t = t.replace(/և/g, 'եւ');
+
   // ── 5. Whitespace normalize ──────────────────────────────────
   t = t.replace(/\s+/g, ' ').trim();
 
@@ -741,8 +744,14 @@ const _BODY_TOKEN_RE = new RegExp(
 );
 
 function _normaliseWord(tok) {
-  try { return tok.toLocaleLowerCase('hy-AM'); }
-  catch { return tok.toLowerCase(); }
+  let s;
+  try { s = tok.toLocaleLowerCase('hy-AM'); }
+  catch { s = tok.toLowerCase(); }
+  // Armenian "ew" ligature — single-codepoint և and two-codepoint եւ are
+  // visually and semantically the same letter combination. Fold to եւ so
+  // they match in the diff.
+  s = s.replace(/և/g, 'եւ');
+  return s;
 }
 
 function _classifyBodyToken(tok) {
