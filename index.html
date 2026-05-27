@@ -818,6 +818,113 @@ function computeMarks(refWords, hypWords) {
   return { refMarks, hypMarks };
 }
 
+// Pair adjacent '-' / '+' ops into substitutions so each highlight can say
+// "should be X" / "model wrote Y" rather than just "missed" / "extra".
+// Walks the LCS ops; within any run of consecutive non-'=' ops, pairs the
+// i-th '-' with the i-th '+'. Unmatched ones get pair = '' (pure deletion
+// or pure insertion).
+function enrichDiff(ops) {
+  const out = [];
+  let i = 0;
+  while (i < ops.length) {
+    if (ops[i].t === '=') { out.push({ t: '=', w: ops[i].w }); i++; continue; }
+    const start = i;
+    while (i < ops.length && ops[i].t !== '=') i++;
+    const run = ops.slice(start, i);
+    const minuses = run.filter(o => o.t === '-');
+    const pluses  = run.filter(o => o.t === '+');
+    // Original LCS order placed all '-' before '+' in a run; preserve that.
+    minuses.forEach((o, j) => out.push({ t: '-', w: o.w, pair: pluses[j]?.w || '' }));
+    pluses.forEach((o, j)  => out.push({ t: '+', w: o.w, pair: minuses[j]?.w || '' }));
+  }
+  return out;
+}
+
+// Render the model output (hyp) with COMBINED diff annotations overlaid on the
+// dialogue/markdown structure:
+//   - words present in OG but missing here are inserted INLINE as red
+//     strikethrough at their LCS position (so you can see what the model
+//     skipped, and where);
+//   - words the model added (not in OG) are highlighted YELLOW in place;
+//   - matched words render plain.
+// Hover tooltips name the partner word ("should be …" / "model wrote …"),
+// which the user explicitly asked for.
+function renderHypWithCombinedDiff(hypTokens, enrichedOps) {
+  if (!hypTokens || !hypTokens.length) return '<em style="opacity:.5">(empty)</em>';
+  const tsStyle       = "color:#94a3b8;font-size:.78rem;font-family:'SF Mono',Menlo,Consolas,monospace;margin:6px 0 2px";
+  const tsInlineStyle = "color:#94a3b8;font-size:.82rem;font-family:'SF Mono',Menlo,Consolas,monospace";
+  const stageStyle    = "color:#94a3b8;font-style:italic";
+  const lineStyle     = "margin:4px 0;line-height:1.55";
+  const delStyle      = "background:#fee2e2;color:#b91c1c;text-decoration:line-through;padding:1px 5px;border-radius:3px;font-style:italic;cursor:help;";
+  const insStyle      = "background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;font-weight:700;cursor:help;";
+
+  let opIdx = 0;
+  const flushMissed = () => {
+    let html = '';
+    while (opIdx < enrichedOps.length && enrichedOps[opIdx].t === '-') {
+      const op = enrichedOps[opIdx];
+      // Use single quotes around the words so they don't clash with the
+      // double-quoted title="..." attribute.
+      const tip = op.pair
+        ? "Missed — should be: '" + op.w + "'. The model wrote: '" + op.pair + "' here instead."
+        : "Missed — should be: '" + op.w + "'. The model skipped this word.";
+      html += '<span class="diff-miss" style="' + delStyle + '" title="' + escHtml(tip) + '">' + escHtml(op.w) + '</span> ';
+      opIdx++;
+    }
+    return html;
+  };
+
+  // Leading missed words (before the first hyp word match)
+  let html = '';
+  const lead = flushMissed();
+  if (lead) html += '<div style="' + lineStyle + '">' + lead + '</div>';
+
+  html += hypTokens.map(line => {
+    if (line.kind === 'empty')    return '<div style="' + lineStyle + '">&nbsp;</div>';
+    if (line.kind === 'cue')      return '<div style="' + tsStyle + '">' + escHtml(line.original || '') + '</div>';
+    if (line.kind === 'arrow_ts') return '<div style="' + tsStyle + '">' + escHtml(line.original) + '</div>';
+    if (line.kind === 'bare_ts')  return '<div style="' + tsStyle + '">' + escHtml(line.original || line.text) + '</div>';
+
+    let inner = '';
+    if (line.leadingTs) inner += '<span style="' + tsInlineStyle + ';margin-right:6px">[' + escHtml(line.leadingTs) + ']</span>';
+    if (line.speaker)   inner += '<strong style="color:#6366f1">' + escHtml(line.speaker) + ':</strong> ';
+
+    line.parts.forEach(p => {
+      if (p.kind === 'word') {
+        // First, flush any pending '-' ops as red strikethrough inline.
+        inner += flushMissed();
+        const op = enrichedOps[opIdx++];
+        const w = escHtml(p.text);
+        if (op && op.t === '+') {
+          const tip = op.pair
+            ? "Extra — model wrote: '" + p.text + "'. OG had: '" + op.pair + "' here."
+            : "Extra — model wrote: '" + p.text + "'. This word is not in the OG.";
+          inner += '<mark class="diff-extra" style="' + insStyle + '" title="' + escHtml(tip) + '">' + w + '</mark>';
+        } else {
+          inner += w; // '=' match (or fallback)
+        }
+      } else if (p.kind === 'space') {
+        inner += p.text;
+      } else if (p.kind === 'punct') {
+        inner += escHtml(p.text);
+      } else if (p.kind === 'speaker_inline') {
+        inner += '<strong style="color:#6366f1">' + escHtml(p.text) + '</strong>';
+      } else if (p.kind === 'ts_inline') {
+        inner += '<span style="' + tsInlineStyle + '">' + escHtml(p.text) + '</span>';
+      } else if (p.kind === 'stage_dir') {
+        inner += '<span style="' + stageStyle + '">' + escHtml(p.text) + '</span>';
+      }
+    });
+
+    return '<div style="' + lineStyle + '">' + inner + '</div>';
+  }).join('');
+
+  // Trailing missed words (after the last hyp word)
+  const trail = flushMissed();
+  if (trail) html += '<div style="' + lineStyle + '">' + trail + '</div>';
+  return html;
+}
+
 // Render structured tokens with optional word-level highlights.
 //   marks: array of '='/'-'/'+' marks aligned with word tokens in `tokens`.
 //          Pass null to render with no highlights.
@@ -881,32 +988,36 @@ function renderWithMarks(tokens, marks, side) {
 
 // ── Row details ────────────────────────────────
 function renderRowDetails(rows, modelKeys) {
+  // CSV column order — present models the way they appear in the user's
+  // spreadsheet rather than re-sorting by accuracy.
+  const csvOrdered = csvHeaders
+    .map(hdr => modelKeys.find(k => colMapping[k] === hdr))
+    .filter(Boolean);
+
   const container = document.getElementById('rowDetails');
   container.innerHTML = rows.slice(0, 100).map((row, i) => {
     const rowRef = row.ref || '(empty)';
     const refPreview = rowRef.length > 80 ? rowRef.slice(0, 80) + '…' : rowRef;
 
-    // Find best model for this row
+    // Best model (for the row header)
     let bestK = null, bestAcc = -1;
     modelKeys.forEach(k => {
       const acc = row.models[k]?.charAcc;
       if (acc != null && acc > bestAcc) { bestAcc = acc; bestK = k; }
     });
 
-    // Tokenize the reference once per row — we'll re-render it for each model
-    // with model-specific "missed words" highlights painted on it.
     const refTokens = tokenizeForHighlight(row.rawRef);
     const refWords  = collectWords(refTokens);
+    const refHtml   = renderWithMarks(refTokens, null, null); // verbatim, no highlights
 
-    const rowsHtml = modelKeys.map(k => {
+    const modelsHtml = csvOrdered.map(k => {
       const m = row.models[k];
       if (!m) return '';
       const isBest = k === bestK;
       const hypTokens = tokenizeForHighlight(m.rawHyp);
       const hypWords  = collectWords(hypTokens);
-      const { refMarks, hypMarks } = computeMarks(refWords, hypWords);
-      const refHtml = renderWithMarks(refTokens, refMarks, 'ref');
-      const hypHtml = renderWithMarks(hypTokens, hypMarks, 'hyp');
+      const enriched  = enrichDiff(computeWDiff(refWords, hypWords).ops);
+      const hypHtml   = renderHypWithCombinedDiff(hypTokens, enriched);
       return `
       <div class="model-row">
         <div class="model-name" style="color:${MODEL_DEFS[k]?.color}">${MODEL_DEFS[k]?.label || k}${isBest ? ' ✓' : ''}</div>
@@ -917,10 +1028,7 @@ function renderRowDetails(rows, modelKeys) {
             <span class="metric-pill">Char Acc ${m.charAcc != null ? m.charAcc.toFixed(1) + '%' : '—'}</span>
             <span class="metric-pill">BLEU-1 ${m.bleu1 != null ? m.bleu1.toFixed(1) + '%' : '—'}</span>
           </div>
-          <div style="font-size:.7rem;color:var(--muted);margin-top:10px;text-transform:uppercase;letter-spacing:.04em">Reference — words this model missed in red</div>
-          <div class="diff-block diff-ref" style="margin-top:4px;font-size:.82rem;white-space:normal;line-height:1.4">${refHtml}</div>
-          <div style="font-size:.7rem;color:var(--muted);margin-top:10px;text-transform:uppercase;letter-spacing:.04em">${MODEL_DEFS[k]?.label || k} output — extras in yellow</div>
-          <div class="diff-block" style="margin-top:4px;font-size:.82rem;white-space:normal;line-height:1.4">${hypHtml}</div>
+          <div class="diff-block" style="margin-top:8px;font-size:.82rem;white-space:normal;line-height:1.4">${hypHtml}</div>
         </div>
       </div>`;
     }).join('');
@@ -933,12 +1041,14 @@ function renderRowDetails(rows, modelKeys) {
       </div>
       <div class="detail-body">
         <div class="diff-legend">
-          <span><strong>Hover any highlight for an explanation.</strong></span>
-          <span><span class="dw-del">red on OG</span> = words this model <em>missed</em></span>
-          <span><span class="dw-ins">yellow on output</span> = words this model <em>added</em> (not in OG)</span>
+          <span><strong>Hover any highlight to see what it should be.</strong></span>
+          <span><span class="dw-del">red strikethrough</span> = word from OG the model missed (inserted at its position)</span>
+          <span><span class="dw-ins">yellow</span> = word the model added (not in OG)</span>
           <span>plain = correct · speakers, timestamps, punctuation, casing ignored when matching</span>
         </div>
-        ${rowsHtml}
+        <div style="font-size:.7rem;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em">📝 Original (OG) — verbatim from CSV</div>
+        <div class="diff-block diff-ref" style="margin-bottom:14px;font-size:.82rem;white-space:normal;line-height:1.4">${refHtml}</div>
+        ${modelsHtml}
       </div>
     </div>`;
   }).join('');
@@ -1314,16 +1424,24 @@ function generateReport() {
   h += '<mark style="background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;font-weight:700;">extra (possible hallucination)</mark> · plain = correct';
   h += '</div>';
 
+  // Per-segment iteration order: CSV column order (so the report mirrors
+  // the user's spreadsheet). Executive summary / ranking tables stay
+  // accuracy-sorted — those *are* about ranking.
+  const csvOrdered = csvHeaders
+    .map(hdr => modelKeys.find(k => colMapping[k] === hdr))
+    .filter(Boolean);
+
   rowResults.forEach((row, i) => {
     const preview = hEsc((row.ref || '').slice(0, 80));
     h += '<details style="' + S.details + '" open>';
     h += '<summary style="' + S.summary + '"><strong>Segment ' + (i + 1) + ':</strong> ' + preview + '…</summary>';
     h += '<div style="' + S.detailsBody + '">';
 
-    // Per-segment accuracy table
+    // Per-segment accuracy table — kept in CSV order so the table aligns
+    // with the model cards below.
     h += tbl(
       ['Model','WER','','CER','','BLEU-1','Char Acc'],
-      sorted.filter(k => row.models[k]).map(k => {
+      csvOrdered.filter(k => row.models[k]).map(k => {
         const m = row.models[k];
         return [
           hEsc(MODEL_DEFS[k]?.label || k),
@@ -1335,34 +1453,33 @@ function generateReport() {
       })
     );
 
-    // Tokenise OG once; we re-render it for each model with that model's
-    // "missed words" highlighted, alongside the model output with extras.
+    // 1) OG shown ONCE at the top, verbatim, no highlights.
     const refTokens = tokenizeForHighlight(row.rawRef);
     const refWords  = collectWords(refTokens);
 
-    h += '<p style="font-size:.85rem;color:#64748b;margin:18px 0 4px"><strong>📋 OG vs MODEL OUTPUTS</strong> <em style="font-weight:400">(dialogue/markdown format preserved verbatim · hover any highlight for an explanation)</em></p>';
-    h += '<div style="' + S.legend + '"><strong>Two colors, two different things:</strong> ';
-    h += '<span style="background:#fee2e2;color:#b91c1c;text-decoration:line-through;padding:1px 5px;border-radius:3px;font-style:italic;cursor:help" title="' + _MISS_TIP + '">red on OG</span> = words this model <em>missed</em> · ';
-    h += '<mark style="background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;font-weight:700;cursor:help" title="' + _EXTRA_TIP + '">yellow on output</mark> = words this model <em>added</em> (not in OG). Speakers, timestamps, punctuation, casing all ignored when matching.</div>';
+    h += '<div style="font-size:.72rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em;margin:18px 0 4px">📝 Original (OG) — verbatim from your CSV</div>';
+    h += '<div style="' + S.refBlock + '">' + renderWithMarks(refTokens, null, null) + '</div>';
 
-    sorted.forEach(k => {
+    // Legend just above the model blocks
+    h += '<div style="' + S.legend + ';margin-top:14px"><strong>Below: each model output</strong> with the diff overlaid. ';
+    h += '<span style="background:#fee2e2;color:#b91c1c;text-decoration:line-through;padding:1px 5px;border-radius:3px;font-style:italic;cursor:help" title="' + _MISS_TIP + '">red strikethrough</span> = word in OG the model missed (shown at its position) · ';
+    h += '<mark style="background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;font-weight:700;cursor:help" title="' + _EXTRA_TIP + '">yellow</mark> = word the model added (not in OG). <strong>Hover any highlight</strong> to see what it should have been. Speakers, timestamps, punctuation, casing all ignored when matching.</div>';
+
+    // 2) Each model below, in CSV column order
+    csvOrdered.forEach(k => {
       const m = row.models[k];
       if (!m) return;
       const hypTokens = tokenizeForHighlight(m.rawHyp);
       const hypWords  = collectWords(hypTokens);
-      const { refMarks, hypMarks } = computeMarks(refWords, hypWords);
+      const enriched  = enrichDiff(computeWDiff(refWords, hypWords).ops);
       const color = MODEL_DEFS[k]?.color || '#1e293b';
 
       h += '<div style="margin:14px 0;padding:14px 16px;border:1px solid #e2e8f0;border-left:4px solid ' + color + ';border-radius:6px;background:#ffffff">';
-      h += '<div style="font-size:.95rem;font-weight:700;color:' + color + ';margin-bottom:10px">' + hEsc(MODEL_DEFS[k]?.label || k) + '</div>';
-
-      h += '<div style="font-size:.72rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">📝 OG — words this model missed shown in red</div>';
-      h += '<div style="' + S.refBlock + '">' + renderWithMarks(refTokens, refMarks, 'ref') + '</div>';
-
-      h += '<div style="font-size:.72rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em;margin:12px 0 4px">🤖 ' + hEsc(MODEL_DEFS[k]?.label || k) + ' output — extras shown in yellow</div>';
-      h += '<div style="background:#fafafa;border:1px solid #f1f5f9;padding:10px 14px;border-radius:4px;font-size:.92rem">' + renderWithMarks(hypTokens, hypMarks, 'hyp') + '</div>';
-
-      h += '</div>';
+      h += '<div style="font-size:.95rem;font-weight:700;color:' + color + ';margin-bottom:6px">🤖 ' + hEsc(MODEL_DEFS[k]?.label || k);
+      h += ' <span style="font-weight:400;color:#94a3b8;font-size:.78rem">— WER ' + fmtPct(m.wer) + ' · CER ' + fmtPct(m.cer) + '</span></div>';
+      h += '<div style="background:#fafafa;border:1px solid #f1f5f9;padding:10px 14px;border-radius:4px;font-size:.92rem">';
+      h += renderHypWithCombinedDiff(hypTokens, enriched);
+      h += '</div></div>';
     });
 
     h += '</div></details>';
