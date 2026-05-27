@@ -97,6 +97,9 @@
   /* Word-level diff chips */
   .dw-del { background: #fee2e2; color: #b91c1c; border-radius: 4px; padding: 1px 5px; text-decoration: line-through; font-style: italic; }
   .dw-ins { background: #fef3c7; color: #92400e; border-radius: 4px; padding: 1px 5px; font-weight: 700; }
+  /* Hover state for the new dialogue-overlaid highlights */
+  .diff-miss:hover  { background: #fca5a5 !important; }
+  .diff-extra:hover { background: #fcd34d !important; }
   .diff-legend { font-size: .7rem; color: var(--muted); margin-bottom: 10px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
   .diff-legend span { display: inline-flex; align-items: center; gap: 5px; }
   .model-row { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
@@ -371,8 +374,8 @@ function preprocessText(raw) {
   t = t.replace(/[\[(<]\s*S\d+\s*[\])>]\s*:?/gi, ' ');
   // "Speaker N:" / "SPEAKER_0:" anywhere in text
   t = t.replace(/\b(?:speaker|SPEAKER)[ _]?\d+\s*:/gi, ' ');
-  // "S1:" / "S2:" abbreviation at line start
-  t = t.replace(/(?:^|\n)\s*S\d{1,2}\s*:\s*/g, ' ');
+  // "S1:" / "S2:" abbreviation anywhere
+  t = t.replace(/\bS\d{1,2}\s*:/g, ' ');
   // Name + colon at line start (e.g. "John:", "Արամ:", "Анна:")
   t = t.replace(/(?:^|\n)\s*[\p{L}][\p{L}_'-]{1,30}\s*:\s+/gu, ' ');
   // Stage directions in brackets: [laughter], (applause), [inaudible]
@@ -719,54 +722,79 @@ const _SPEAKER_RE = /^(speaker[ _]?\d+|S\d+|[\p{L}][\p{L}_'-]{0,30})\s*:\s+(.*)$
 const _ARROW_TS_RE = /^\s*(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})\s*$/;
 const _BARE_TS_RE  = /^\s*(\d{1,2}:\d{2}(?::\d{2})?)\s*$/;
 const _CUE_NUM_RE  = /^\s*\d+\s*$/;
-const _TOKEN_RE    = /[\p{L}\p{N}]+|[^\p{L}\p{N}\s]+|\s+/gu;
-
 const _INLINE_TS_RE = /^\s*[\[(]\s*(\d{1,2}:\d{2}(?::\d{2})?(?:[,.]\d{1,3})?)\s*[\])]\s*(.*)$/;
+
+// Single-pass body tokenizer. Order matters — speakers/timestamps/stage dirs
+// are tested before bare letters so embedded labels are recognised as
+// structure rather than content. The kinds NOT counted as words for the diff:
+// speaker_inline, ts_inline, stage_dir, bracketed_ts, punct, space.
+const _BODY_TOKEN_RE = new RegExp(
+  '\\[[^\\]\\n]{1,60}\\]' +                                        // [stage direction] / [Speaker 1]
+  '|\\([^)\\n]{1,60}\\)' +                                          // (applause) / (Speaker 1)
+  '|\\b(?:speaker|SPEAKER)[ _]?\\d+\\s*:' +                         // inline "Speaker 1:"
+  '|\\bS\\d{1,2}\\s*:' +                                            // inline "S1:"
+  '|(?<![\\p{L}\\p{N}])\\d{1,2}:\\d{2}(?::\\d{2})?(?:[,.]\\d{1,3})?(?![\\p{L}\\p{N}])' + // bare timestamp
+  '|[\\p{L}\\p{N}]+' +                                              // word
+  '|\\s+' +                                                          // whitespace
+  '|[^\\p{L}\\p{N}\\s]+',                                            // punctuation
+  'giu'
+);
+
+function _normaliseWord(tok) {
+  try { return tok.toLocaleLowerCase('hy-AM'); }
+  catch { return tok.toLowerCase(); }
+}
+
+function _classifyBodyToken(tok) {
+  if (/^\[/.test(tok))                                     return { kind: 'stage_dir', text: tok };
+  if (/^\(/.test(tok))                                     return { kind: 'stage_dir', text: tok };
+  if (/^speaker[ _]?\d+\s*:$/i.test(tok))                  return { kind: 'speaker_inline', text: tok };
+  if (/^S\d{1,2}\s*:$/.test(tok))                          return { kind: 'speaker_inline', text: tok };
+  if (/^\d{1,2}:\d{2}/.test(tok))                          return { kind: 'ts_inline', text: tok };
+  if (/^[\p{L}\p{N}]+$/u.test(tok))                        return { kind: 'word', text: tok, norm: _normaliseWord(tok) };
+  if (/^\s+$/.test(tok))                                   return { kind: 'space', text: tok };
+  return { kind: 'punct', text: tok };
+}
 
 function tokenizeForHighlight(raw) {
   if (!raw) return [];
-  return String(raw).split(/\r?\n/).map(line => {
+  let t = String(raw);
+  try { t = t.normalize('NFC'); } catch {}
+
+  return t.split(/\r?\n/).map(line => {
     if (!line.trim()) return { kind: 'empty' };
     let m;
-    if ((m = line.match(_ARROW_TS_RE))) return { kind: 'arrow_ts', start: m[1], end: m[2] };
-    if ((m = line.match(_BARE_TS_RE)))  return { kind: 'bare_ts', text: m[1] };
-    if (_CUE_NUM_RE.test(line))         return { kind: 'cue' };
+    if ((m = line.match(_ARROW_TS_RE))) return { kind: 'arrow_ts', original: line, start: m[1], end: m[2] };
+    if ((m = line.match(_BARE_TS_RE)))  return { kind: 'bare_ts',  original: line, text: m[1] };
+    if (_CUE_NUM_RE.test(line))         return { kind: 'cue',      original: line };
 
-    // Peel off a leading bracketed timestamp like "[00:00:01]" so it shows
-    // as a timestamp tag rather than getting tokenized as bare word/punct
-    // (which would otherwise appear as "extras" in the diff).
+    // Peel off leading bracketed timestamp ("[00:00:01] Speaker 1: ..." style)
     let leadingTs = null;
     if ((m = line.match(_INLINE_TS_RE))) {
       leadingTs = m[1];
       line = m[2];
-      if (!line.trim()) return { kind: 'bare_ts', text: leadingTs };
+      if (!line.trim()) return { kind: 'bare_ts', original: '[' + leadingTs + ']', text: leadingTs };
     }
 
+    // Line-start speaker label (preserved verbatim in display, dropped from word list)
     let speaker = null;
-    let body = line;
     if ((m = line.match(_SPEAKER_RE))) {
       speaker = m[1];
-      body = m[2];
+      line = m[2];
     }
+
     const parts = [];
-    _TOKEN_RE.lastIndex = 0;
-    let t;
-    while ((t = _TOKEN_RE.exec(body)) !== null) {
-      const tok = t[0];
-      if (/^[\p{L}\p{N}]+$/u.test(tok)) {
-        let norm;
-        try { norm = tok.toLocaleLowerCase('hy-AM'); } catch { norm = tok.toLowerCase(); }
-        parts.push({ kind: 'word', text: tok, norm });
-      } else if (/^\s+$/.test(tok)) {
-        parts.push({ kind: 'space', text: tok });
-      } else {
-        parts.push({ kind: 'punct', text: tok });
-      }
+    _BODY_TOKEN_RE.lastIndex = 0;
+    let mm;
+    while ((mm = _BODY_TOKEN_RE.exec(line)) !== null) {
+      parts.push(_classifyBodyToken(mm[0]));
     }
     return { kind: 'text', leadingTs, speaker, parts };
   });
 }
 
+// Flat list of WORD tokens for the diff — must match what preprocessText
+// retains so display and scoring agree.
 function collectWords(tokens) {
   const out = [];
   tokens.forEach(line => {
@@ -795,23 +823,32 @@ function computeMarks(refWords, hypWords) {
 //          Pass null to render with no highlights.
 //   side:  'ref' (highlight '-' as red strikethrough) | 'hyp' (highlight '+'
 //          as yellow mark) | null (no highlights even if marks given).
+//
+// All non-word parts (speakers, timestamps, stage directions, punctuation) are
+// rendered VERBATIM from the original raw text — no edits, no reformatting.
+// Highlights are painted ONLY on word tokens that the diff flagged.
+const _MISS_TIP = "Missed — this word is in the OG but not in the model output. Punctuation, casing, speakers, and timestamps are ignored when scoring.";
+const _EXTRA_TIP = "Extra — this word is in the model output but not in the OG. Could be a misrecognition or filler.";
+
 function renderWithMarks(tokens, marks, side) {
   if (!tokens || !tokens.length) return '<em style="opacity:.5">(empty)</em>';
-  const tsStyle   = "color:#94a3b8;font-size:.78rem;font-family:'SF Mono',Menlo,Consolas,monospace;margin:6px 0 2px";
-  const lineStyle = "margin:4px 0;line-height:1.55";
-  const delStyle  = "background:#fee2e2;color:#b91c1c;text-decoration:line-through;padding:1px 5px;border-radius:3px;font-style:italic;";
-  const insStyle  = "background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;font-weight:700;";
+  const tsStyle      = "color:#94a3b8;font-size:.78rem;font-family:'SF Mono',Menlo,Consolas,monospace;margin:6px 0 2px";
+  const tsInlineStyle = "color:#94a3b8;font-size:.82rem;font-family:'SF Mono',Menlo,Consolas,monospace";
+  const stageStyle   = "color:#94a3b8;font-style:italic";
+  const lineStyle    = "margin:4px 0;line-height:1.55";
+  const delStyle     = "background:#fee2e2;color:#b91c1c;text-decoration:line-through;padding:1px 5px;border-radius:3px;font-style:italic;cursor:help;";
+  const insStyle     = "background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;font-weight:700;cursor:help;";
   let wi = 0;
 
   return tokens.map(line => {
-    if (line.kind === 'empty')    return '';
-    if (line.kind === 'cue')      return '';
-    if (line.kind === 'arrow_ts') return '<div style="' + tsStyle + '">⏱ ' + line.start + ' → ' + line.end + '</div>';
-    if (line.kind === 'bare_ts')  return '<div style="' + tsStyle + '">⏱ ' + escHtml(line.text) + '</div>';
+    if (line.kind === 'empty')    return '<div style="' + lineStyle + '">&nbsp;</div>';
+    if (line.kind === 'cue')      return '<div style="' + tsStyle + '">' + escHtml(line.original || '') + '</div>';
+    if (line.kind === 'arrow_ts') return '<div style="' + tsStyle + '">' + escHtml(line.original) + '</div>';
+    if (line.kind === 'bare_ts')  return '<div style="' + tsStyle + '">' + escHtml(line.original || line.text) + '</div>';
 
     let inner = '';
     if (line.leadingTs) {
-      inner += '<span style="color:#94a3b8;font-size:.78rem;font-family:\'SF Mono\',Menlo,Consolas,monospace;margin-right:6px">⏱ ' + escHtml(line.leadingTs) + '</span>';
+      inner += '<span style="' + tsInlineStyle + ';margin-right:6px">[' + escHtml(line.leadingTs) + ']</span>';
     }
     if (line.speaker) {
       inner += '<strong style="color:#6366f1">' + escHtml(line.speaker) + ':</strong> ';
@@ -820,13 +857,22 @@ function renderWithMarks(tokens, marks, side) {
       if (p.kind === 'word') {
         const mark = marks ? marks[wi++] : null;
         const w = escHtml(p.text);
-        if (side === 'ref' && mark === '-')      inner += '<span style="' + delStyle + '">' + w + '</span>';
-        else if (side === 'hyp' && mark === '+') inner += '<mark style="' + insStyle + '">' + w + '</mark>';
-        else                                      inner += w;
+        if (side === 'ref' && mark === '-')
+          inner += '<span class="diff-miss" style="' + delStyle + '" title="' + _MISS_TIP + '">' + w + '</span>';
+        else if (side === 'hyp' && mark === '+')
+          inner += '<mark class="diff-extra" style="' + insStyle + '" title="' + _EXTRA_TIP + '">' + w + '</mark>';
+        else
+          inner += w;
       } else if (p.kind === 'space') {
         inner += p.text;
       } else if (p.kind === 'punct') {
         inner += escHtml(p.text);
+      } else if (p.kind === 'speaker_inline') {
+        inner += '<strong style="color:#6366f1">' + escHtml(p.text) + '</strong>';
+      } else if (p.kind === 'ts_inline') {
+        inner += '<span style="' + tsInlineStyle + '">' + escHtml(p.text) + '</span>';
+      } else if (p.kind === 'stage_dir') {
+        inner += '<span style="' + stageStyle + '">' + escHtml(p.text) + '</span>';
       }
     });
     return '<div style="' + lineStyle + '">' + inner + '</div>';
@@ -887,10 +933,10 @@ function renderRowDetails(rows, modelKeys) {
       </div>
       <div class="detail-body">
         <div class="diff-legend">
-          <span>Word diff (overlaid on the dialogue):</span>
-          <span><span class="dw-del">missed word</span> = in OG, skipped by ASR</span>
-          <span><span class="dw-ins">extra word</span> = ASR added, not in OG</span>
-          <span>plain = correct · punctuation, casing, speakers ignored</span>
+          <span><strong>Hover any highlight for an explanation.</strong></span>
+          <span><span class="dw-del">red on OG</span> = words this model <em>missed</em></span>
+          <span><span class="dw-ins">yellow on output</span> = words this model <em>added</em> (not in OG)</span>
+          <span>plain = correct · speakers, timestamps, punctuation, casing ignored when matching</span>
         </div>
         ${rowsHtml}
       </div>
@@ -1051,6 +1097,13 @@ function generateReport() {
   h += '<meta charset="UTF-8">\n';
   h += '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n';
   h += '<title>ASR Comparison Report — ' + now + '</title>\n';
+  // Hover state on highlight spans — inline styles already cover the base
+  // appearance for Notion/email; this gives a tooltip-style color change in
+  // any environment that renders <style>.
+  h += '<style>\n';
+  h += '  .diff-miss:hover  { background:#fca5a5 !important; }\n';
+  h += '  .diff-extra:hover { background:#fcd34d !important; }\n';
+  h += '</style>\n';
   h += '</head>\n<body style="' + S.body + '">\n';
 
   // ── HEADER ────────────────────────────────────────────────────────────────
@@ -1287,7 +1340,10 @@ function generateReport() {
     const refTokens = tokenizeForHighlight(row.rawRef);
     const refWords  = collectWords(refTokens);
 
-    h += '<p style="font-size:.85rem;color:#64748b;margin:18px 0 4px"><strong>📋 OG vs MODEL OUTPUTS</strong> <em style="font-weight:400">(dialogue/markdown format preserved · highlights overlaid · full text, no truncation)</em></p>';
+    h += '<p style="font-size:.85rem;color:#64748b;margin:18px 0 4px"><strong>📋 OG vs MODEL OUTPUTS</strong> <em style="font-weight:400">(dialogue/markdown format preserved verbatim · hover any highlight for an explanation)</em></p>';
+    h += '<div style="' + S.legend + '"><strong>Two colors, two different things:</strong> ';
+    h += '<span style="background:#fee2e2;color:#b91c1c;text-decoration:line-through;padding:1px 5px;border-radius:3px;font-style:italic;cursor:help" title="' + _MISS_TIP + '">red on OG</span> = words this model <em>missed</em> · ';
+    h += '<mark style="background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;font-weight:700;cursor:help" title="' + _EXTRA_TIP + '">yellow on output</mark> = words this model <em>added</em> (not in OG). Speakers, timestamps, punctuation, casing all ignored when matching.</div>';
 
     sorted.forEach(k => {
       const m = row.models[k];
