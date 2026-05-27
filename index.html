@@ -345,28 +345,50 @@ function autoDetect(key, headers) {
 // ══════════════════════════════════════════════
 //  TEXT PREPROCESSING
 // ══════════════════════════════════════════════
+// Cleans raw transcription so that scoring focuses on the *words spoken*,
+// not punctuation, casing, speaker labels, or stage directions.
+// Both reference and hypothesis pass through the same pipeline → fair comparison.
 function preprocessText(raw) {
   if (!raw) return '';
-  let t = raw;
+  let t = String(raw);
 
-  // Remove SRT/WebVTT style timestamps: 00:00:00,000 --> 00:00:05,000
-  t = t.replace(/\d{1,2}:\d{2}:\d{2}[,\.]\d{1,3}\s*-->\s*\d{1,2}:\d{2}:\d{2}[,\.]\d{1,3}/g, '');
-  // Remove [HH:MM:SS] or [MM:SS] timestamps
-  t = t.replace(/\[\s*\d{1,2}:\d{2}(?::\d{2})?\s*\]/g, '');
-  // Remove bare timestamps like 00:12 or 00:12:34 (not preceded by letters)
-  t = t.replace(/(?<![a-zA-ZԱ-Ֆа-яА-Я])\b\d{1,2}:\d{2}(?::\d{2})?\b/g, '');
-  // Remove sequence numbers (lines that are just a number)
-  t = t.replace(/^\s*\d+\s*$/gm, '');
+  // Unicode normalize so visually-identical glyphs (NFC vs NFD) compare equal
+  try { t = t.normalize('NFC'); } catch {}
 
-  // Remove speaker labels — any line-start pattern like "Speaker 1:", "SPEAKER_0:", Armenian/Russian names + colon
-  // Matches: word(s) [optionally with underscore or space] + optional number + colon at start of line/segment
-  t = t.replace(/^[\p{L}\p{N}_]+(?:[\s_][\p{L}\p{N}_]+)*\s*\d*\s*:\s*/ugm, '');
+  // ── 1. Timestamps ─────────────────────────────────────────────
+  // SRT/VTT arrow timestamps: 00:00:00,000 --> 00:00:05,000
+  t = t.replace(/\d{1,2}:\d{2}:\d{2}[,.]\d{1,3}\s*-->\s*\d{1,2}:\d{2}:\d{2}[,.]\d{1,3}/g, ' ');
+  // Bracketed timestamps: [00:12], (00:12:34)
+  t = t.replace(/[\[(]\s*\d{1,2}:\d{2}(?::\d{2})?\s*[\])]/g, ' ');
+  // Bare HH:MM(:SS) not glued to letters
+  t = t.replace(/(?<![\p{L}])\d{1,2}:\d{2}(?::\d{2})?(?![\p{L}])/gu, ' ');
+  // SRT cue numbers (lines that are just a number)
+  t = t.replace(/^\s*\d+\s*$/gm, ' ');
 
-  // Normalize whitespace
-  t = t.replace(/[ \t]+/g, ' ');
-  t = t.replace(/\n{2,}/g, ' ');
-  t = t.replace(/\n/g, ' ');
-  t = t.trim();
+  // ── 2. Speaker labels & stage directions ─────────────────────
+  // Bracketed speakers: [Speaker 1], (Speaker_0), <SPEAKER 2>
+  t = t.replace(/[\[(<]\s*(?:speaker|SPEAKER)[ _]?\d+\s*[\])>]\s*:?/gi, ' ');
+  t = t.replace(/[\[(<]\s*S\d+\s*[\])>]\s*:?/gi, ' ');
+  // "Speaker N:" / "SPEAKER_0:" anywhere in text
+  t = t.replace(/\b(?:speaker|SPEAKER)[ _]?\d+\s*:/gi, ' ');
+  // "S1:" / "S2:" abbreviation at line start
+  t = t.replace(/(?:^|\n)\s*S\d{1,2}\s*:\s*/g, ' ');
+  // Name + colon at line start (e.g. "John:", "Արամ:", "Анна:")
+  t = t.replace(/(?:^|\n)\s*[\p{L}][\p{L}_'-]{1,30}\s*:\s+/gu, ' ');
+  // Stage directions in brackets: [laughter], (applause), [inaudible]
+  t = t.replace(/\[[^\]\n]{1,60}\]/g, ' ');
+  t = t.replace(/\([^)\n]{1,60}\)/g, ' ');
+
+  // ── 3. Strip punctuation & symbols ───────────────────────────
+  // Keep only letters (any script), digits, whitespace.
+  // Removes: . , : ; ! ? * « » " ' ։ ՝ ՞ ՛ ՚ – — _ # @ / \ | etc.
+  t = t.replace(/[^\p{L}\p{N}\s]/gu, ' ');
+
+  // ── 4. Case fold (so capitalization doesn't count as an error) ─
+  try { t = t.toLocaleLowerCase('hy-AM'); } catch { t = t.toLowerCase(); }
+
+  // ── 5. Whitespace normalize ──────────────────────────────────
+  t = t.replace(/\s+/g, ' ').trim();
 
   return t;
 }
@@ -762,9 +784,21 @@ document.getElementById('resetBtn').addEventListener('click', () => {
 function wg(v) { return v == null ? '—' : v <= 10 ? '🟢' : v <= 25 ? '🟡' : v <= 50 ? '🟠' : '🔴'; }
 function cg(v) { return v == null ? '—' : v <= 10 ? '🟢' : v <= 25 ? '🟡' : v <= 50 ? '🟠' : '🔴'; }
 function gl(v) { return v == null ? '—' : v <= 10 ? 'Excellent' : v <= 25 ? 'Good' : v <= 50 ? 'Moderate' : 'Poor'; }
-function escMd(s) { return String(s).replace(/\|/g, '\\|').replace(/\n/g, ' '); }
+function gradeClass(v) {
+  if (v == null) return '';
+  if (v <= 10) return 'g-good';
+  if (v <= 25) return 'g-ok';
+  if (v <= 50) return 'g-mod';
+  return 'g-bad';
+}
+function hEsc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function fmtPct(v, dec = 1) { return v == null ? '—' : v.toFixed(dec) + '%'; }
 
-function computeWDiff(rw, hw, cap = 150) {
+function rptDiff(rw, hw, cap = 150) {
   const r = rw.slice(0, cap), h = hw.slice(0, cap);
   const m = r.length, n = h.length;
   const dp = Array.from({ length: m + 1 }, () => new Int16Array(n + 1));
@@ -779,14 +813,19 @@ function computeWDiff(rw, hw, cap = 150) {
   return { ops, tr: rw.length > cap || hw.length > cap };
 }
 
-function diffMd(ref, hyp) {
+// HTML diff with inline-styled spans (highlights survive Notion HTML import)
+function diffHtml(ref, hyp) {
   const rw = (ref || '').split(/\s+/).filter(Boolean);
   const hw = (hyp || '').split(/\s+/).filter(Boolean);
-  if (!rw.length && !hw.length) return '*(empty)*';
-  const { ops, tr } = computeWDiff(rw, hw);
-  let out = ops.map(o => o.t === '=' ? o.w : o.t === '-' ? `~~${o.w}~~` : `**${o.w}**`).join(' ');
-  if (tr) out += '\n\n*[Diff truncated at 150 words per side]*';
-  return out || '*(empty)*';
+  if (!rw.length && !hw.length) return '<em style="opacity:.6">(empty)</em>';
+  const { ops, tr } = rptDiff(rw, hw);
+  const out = ops.map(o => {
+    const w = hEsc(o.w);
+    if (o.t === '=') return w;
+    if (o.t === '-') return '<span class="del" style="background:#fee2e2;color:#b91c1c;text-decoration:line-through;padding:1px 5px;border-radius:3px;font-style:italic;">' + w + '</span>';
+    return '<mark class="ins" style="background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;font-weight:700;">' + w + '</mark>';
+  }).join(' ');
+  return out + (tr ? ' <em style="font-size:.75rem;opacity:.6">[…truncated at 150 words]</em>' : '');
 }
 
 // ══════════════════════════════════════════════
@@ -801,7 +840,7 @@ function generateReport() {
   const best = sorted[0];
   const now = new Date().toISOString().split('T')[0];
   const N = rowResults.length;
-  const medals = ['🥇', '🥈', '🥉', '4th', '5th', '6th'];
+  const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣', '6️⃣'];
 
   const COST_AMD = {
     high_speech:       { amd: null, note: 'Custom pricing (contact vendor)' },
@@ -812,236 +851,335 @@ function generateReport() {
     gemini_flash:      { amd: 240,  note: '~$0.60/hr ≈ 240 AMD/hr' },
   };
 
-  let md = '';
-
-  // ── HEADER ──────────────────────────────────────────────────────────────────
-  md += `# 📊 ASR Model Comparison Report\n\n`;
-  md += `> **Generated:** ${now} | **Recordings:** ${N} | **Models tested:** ${modelKeys.length} | **Exchange rate:** 400 AMD/$1\n\n`;
-  md += `---\n\n`;
-
-  // ── TABLE OF CONTENTS ────────────────────────────────────────────────────────
-  md += `## 📑 Table of Contents\n\n`;
-  md += `1. [Executive Summary](#-executive-summary)\n`;
-  md += `2. [Methodology](#-methodology)\n`;
-  md += `3. [Overall Results](#-overall-results)\n`;
-  md += `4. [Model-by-Model Analysis](#-model-by-model-analysis)\n`;
-  md += `5. [Cost Analysis](#-cost-analysis)\n`;
-  md += `6. [Final Recommendations](#-final-recommendations)\n`;
-  md += `7. [Per-Segment Analysis](#-per-segment-analysis)\n`;
-  md += `8. [Glossary](#-glossary)\n\n`;
-  md += `---\n\n`;
-
-  // ── 1. EXECUTIVE SUMMARY ────────────────────────────────────────────────────
-  md += `## 🏆 Executive Summary\n\n`;
-  md += `| Rank | Model | WER ↓ | | CER ↓ | | BLEU-1 ↑ | Cost/hr |\n`;
-  md += `|------|-------|------:|---|------:|---|--------:|--------|\n`;
-  sorted.forEach((k, i) => {
-    const s = modelStats[k];
-    const w = s.avgWER, c = s.avgCER;
-    md += `| ${medals[i] || (i + 1)} | **${escMd(MODEL_DEFS[k]?.label || k)}** | ${w != null ? w.toFixed(1) + '%' : '—'} | ${wg(w)} | ${c != null ? c.toFixed(1) + '%' : '—'} | ${cg(c)} | ${s.avgBleu1 != null ? s.avgBleu1.toFixed(1) + '%' : '—'} | ${MODEL_DEFS[k]?.cost || '?'} |\n`;
-  });
-  md += `\n`;
   const bs = modelStats[best];
-  md += `**Winner: ${MODEL_DEFS[best]?.label || best}** — **${bs?.avgCER?.toFixed(1) ?? '—'}% CER** · **${bs?.avgWER?.toFixed(1) ?? '—'}% WER** across ${N} recordings.\n\n`;
-  md += `> 🟢 **Excellent** (0–10%) · 🟡 **Good** (10–25%) · 🟠 **Moderate** (25–50%) · 🔴 **Poor** (50%+)\n\n`;
-  md += `---\n\n`;
 
-  // ── 2. METHODOLOGY ──────────────────────────────────────────────────────────
-  md += `## 🔬 Methodology\n\n`;
-  md += `### Preprocessing Pipeline\n\n`;
-  md += `All transcriptions are cleaned before comparison:\n\n`;
-  md += `1. **Timestamp removal** — SRT arrows \`00:00:00,000 --> 00:00:05,000\`, brackets \`[00:00]\`, bare \`HH:MM:SS\`\n`;
-  md += `2. **Speaker label removal** — patterns like \`Speaker 1:\`, \`SPEAKER_0:\`, Armenian/Russian/English speaker names at line start\n`;
-  md += `3. **Whitespace normalization** — multiple spaces and newlines collapsed to a single space\n\n`;
-  md += `### Metrics\n\n`;
-  md += `\`\`\`\nCER          = Levenshtein(chars(ref), chars(hyp)) / len(chars(ref)) × 100\nWER          = Levenshtein(words(ref), words(hyp)) / len(words(ref)) × 100\nChar Accuracy = max(0, 100 − CER)\nBLEU-1       = |{w ∈ hyp : w ∈ ref}| / |hyp| × 100  (unigram precision)\n\`\`\`\n\n`;
-  md += `> **Why CER for Armenian?** Armenian is agglutinative — morphological variants of the same root differ by only a few characters. CER captures these partial matches better than WER, which treats the entire word as wrong for any deviation.\n\n`;
-  md += `### Grade Scale\n\n`;
-  md += `| Grade | WER Range | CER Range | Interpretation |\n`;
-  md += `|-------|-----------|-----------|----------------|\n`;
-  md += `| 🟢 Excellent | 0–10% | 0–10% | Production-ready, minimal corrections needed |\n`;
-  md += `| 🟡 Good | 10–25% | 10–25% | Usable with light review |\n`;
-  md += `| 🟠 Moderate | 25–50% | 25–50% | Requires significant editing |\n`;
-  md += `| 🔴 Poor | >50% | >50% | Not suitable without full rework |\n\n`;
-  md += `### Word-Diff Legend\n\n`;
-  md += `In per-segment diffs: ~~word~~ = deleted from reference · **word** = inserted by ASR (possible hallucination) · word = correctly transcribed\n\n`;
-  md += `---\n\n`;
+  // Inline styles — survive Notion HTML import & email forwarding
+  const S = {
+    body: "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:960px;margin:0 auto;padding:40px 28px;color:#1e293b;line-height:1.65;background:#ffffff;",
+    h1: 'font-size:1.9rem;margin:0 0 8px;color:#0f172a;border-bottom:3px solid #6366f1;padding-bottom:14px;',
+    h2: 'font-size:1.35rem;margin:44px 0 14px;color:#0f172a;border-bottom:1px solid #e2e8f0;padding-bottom:6px;',
+    h3: 'font-size:1.05rem;margin:24px 0 10px;color:#1e293b;',
+    table: 'border-collapse:collapse;width:100%;margin:14px 0;font-size:.92rem;',
+    th: 'background:#f1f5f9;padding:10px 12px;text-align:left;border-bottom:2px solid #cbd5e1;font-weight:700;color:#334155;',
+    td: 'padding:8px 12px;border-bottom:1px solid #e2e8f0;vertical-align:top;',
+    refBlock: 'background:#f0fdf4;border-left:4px solid #16a34a;padding:10px 14px;margin:10px 0;border-radius:4px;font-size:.92rem;color:#14532d;',
+    diffBlock: 'background:#f8fafc;border:1px solid #e2e8f0;padding:12px 14px;margin:8px 0 16px;border-radius:6px;line-height:2;font-size:.92rem;',
+    metaBox: 'background:#eef2ff;border-left:4px solid #6366f1;padding:14px 18px;margin:18px 0;border-radius:4px;color:#312e81;',
+    winnerBox: 'background:#fef3c7;border-left:4px solid #ca8a04;padding:14px 18px;margin:18px 0;border-radius:4px;font-size:1.05rem;',
+    legend: 'background:#f8fafc;padding:8px 14px;border-radius:6px;font-size:.82rem;color:#475569;margin:8px 0;',
+    summary: 'padding:12px 16px;cursor:pointer;background:#f8fafc;font-weight:600;border-radius:6px;border:1px solid #e2e8f0;',
+    details: 'margin:8px 0;border-radius:6px;',
+    detailsBody: 'padding:14px 16px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 6px 6px;',
+    code: "background:#f1f5f9;padding:2px 6px;border-radius:3px;font-family:'SF Mono',Menlo,Consolas,monospace;font-size:.88em;",
+    pre: "background:#0f172a;color:#e2e8f0;padding:14px 18px;border-radius:8px;overflow-x:auto;font-family:'SF Mono',Menlo,Consolas,monospace;font-size:.85rem;line-height:1.55;",
+    quote: 'border-left:4px solid #cbd5e1;padding:6px 16px;color:#475569;margin:12px 0;font-style:italic;',
+    toc: 'background:#f8fafc;padding:18px 24px;border-radius:8px;border:1px solid #e2e8f0;margin:18px 0;',
+    footer: 'margin-top:50px;padding:18px 0;border-top:1px solid #e2e8f0;text-align:center;color:#64748b;font-size:.85rem;font-style:italic;',
+  };
 
-  // ── 3. OVERALL RESULTS ──────────────────────────────────────────────────────
-  md += `## 📈 Overall Results\n\n`;
-  md += `### Accuracy Rankings\n\n`;
-  md += `| Rank | Model | CER ↓ | WER ↓ | Char Acc ↑ | BLEU-1 ↑ |\n`;
-  md += `|------|-------|------:|------:|----------:|--------:|\n`;
-  sorted.forEach((k, i) => {
-    const s = modelStats[k];
-    md += `| ${medals[i] || (i + 1)} | **${escMd(MODEL_DEFS[k]?.label || k)}** | ${s.avgCER != null ? s.avgCER.toFixed(1) + '%' : '—'} | ${s.avgWER != null ? s.avgWER.toFixed(1) + '%' : '—'} | ${s.avgCharAcc != null ? s.avgCharAcc.toFixed(1) + '%' : '—'} | ${s.avgBleu1 != null ? s.avgBleu1.toFixed(1) + '%' : '—'} |\n`;
+  const tag = (el, style, content) => '<' + el + ' style="' + style + '">' + content + '</' + el + '>';
+
+  // Builds a complete styled <table>
+  const tbl = (headers, rows) => {
+    let h = '<table style="' + S.table + '"><thead><tr>';
+    headers.forEach(col => { h += '<th style="' + S.th + '">' + col + '</th>'; });
+    h += '</tr></thead><tbody>';
+    rows.forEach(r => {
+      h += '<tr>';
+      r.forEach(c => { h += '<td style="' + S.td + '">' + c + '</td>'; });
+      h += '</tr>';
+    });
+    return h + '</tbody></table>';
+  };
+
+  // Verdict block per model
+  const verdict = (cer, wer) => {
+    if (cer <= 10 && wer <= 15) return '<strong style="color:#16a34a">✅ Production-ready.</strong> Excellent accuracy with minimal character and word errors.';
+    if (cer <= 25 && wer <= 35) return '<strong style="color:#ca8a04">🟡 Good accuracy.</strong> Suitable with light review; may produce occasional word-level errors.';
+    if (cer <= 50 && wer <= 60) return '<strong style="color:#ea580c">🟠 Moderate accuracy.</strong> Usable for drafts but requires meaningful post-editing. Not recommended for automated pipelines.';
+    return '<strong style="color:#dc2626">🔴 Below threshold.</strong> High error rates suggest model–data mismatch. Full correction needed before use.';
+  };
+
+  let h = '<!DOCTYPE html>\n<html lang="en">\n<head>\n';
+  h += '<meta charset="UTF-8">\n';
+  h += '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n';
+  h += '<title>ASR Comparison Report — ' + now + '</title>\n';
+  h += '</head>\n<body style="' + S.body + '">\n';
+
+  // ── HEADER ────────────────────────────────────────────────────────────────
+  h += tag('h1', S.h1, '📊 ASR Model Comparison Report');
+  h += '<div style="' + S.metaBox + '"><strong>Generated:</strong> ' + now;
+  h += ' &nbsp;·&nbsp; <strong>Recordings:</strong> ' + N;
+  h += ' &nbsp;·&nbsp; <strong>Models tested:</strong> ' + modelKeys.length;
+  h += ' &nbsp;·&nbsp; <strong>Exchange rate:</strong> 400 AMD/$1</div>';
+
+  // ── TOC ───────────────────────────────────────────────────────────────────
+  h += tag('h2', S.h2, '📑 Table of Contents');
+  h += '<div style="' + S.toc + '"><ol style="margin:0;padding-left:22px;line-height:1.9">';
+  ['Executive Summary','Methodology','Overall Results','Model-by-Model Analysis','Cost Analysis','Final Recommendations','Per-Segment Analysis','Glossary'].forEach((t, i) => {
+    h += '<li><a href="#sec' + (i+1) + '" style="color:#6366f1;text-decoration:none">' + t + '</a></li>';
   });
-  md += `\n`;
+  h += '</ol></div>';
 
-  // Per-segment WER table
-  md += `### Per-Segment WER\n\n`;
-  md += `| # | ${sorted.map(k => escMd(MODEL_DEFS[k]?.label || k)).join(' | ')} |\n`;
-  md += `|---|${sorted.map(() => '---').join('|')}|\n`;
-  rowResults.forEach((row, i) => {
-    const cells = sorted.map(k => { const w = row.models[k]?.wer; return w != null ? `${wg(w)} ${w.toFixed(0)}%` : '—'; });
-    md += `| ${i + 1} | ${cells.join(' | ')} |\n`;
-  });
-  md += `\n`;
+  // ── 1. EXECUTIVE SUMMARY ──────────────────────────────────────────────────
+  h += '<h2 id="sec1" style="' + S.h2 + '">🏆 Executive Summary</h2>';
+  h += tbl(
+    ['Rank','Model','WER ↓','','CER ↓','','BLEU-1 ↑','Cost/hr'],
+    sorted.map((k, i) => {
+      const s = modelStats[k], w = s.avgWER, c = s.avgCER;
+      return [
+        medals[i] || (i + 1),
+        '<strong>' + hEsc(MODEL_DEFS[k]?.label || k) + '</strong>',
+        fmtPct(w),
+        wg(w),
+        fmtPct(c),
+        cg(c),
+        fmtPct(s.avgBleu1),
+        hEsc(MODEL_DEFS[k]?.cost || '?'),
+      ];
+    })
+  );
+  h += '<div style="' + S.winnerBox + '">🏆 <strong>Winner: ' + hEsc(MODEL_DEFS[best]?.label || best) + '</strong> — ';
+  h += '<strong>' + fmtPct(bs?.avgCER) + ' CER</strong> · <strong>' + fmtPct(bs?.avgWER) + ' WER</strong> across ' + N + ' recordings.</div>';
+  h += '<div style="' + S.legend + '">🟢 <strong>Excellent</strong> (0–10%) · 🟡 <strong>Good</strong> (10–25%) · 🟠 <strong>Moderate</strong> (25–50%) · 🔴 <strong>Poor</strong> (50%+)</div>';
 
-  // Per-segment CER table
-  md += `### Per-Segment CER\n\n`;
-  md += `| # | ${sorted.map(k => escMd(MODEL_DEFS[k]?.label || k)).join(' | ')} |\n`;
-  md += `|---|${sorted.map(() => '---').join('|')}|\n`;
-  rowResults.forEach((row, i) => {
-    const cells = sorted.map(k => { const c = row.models[k]?.cer; return c != null ? `${cg(c)} ${c.toFixed(0)}%` : '—'; });
-    md += `| ${i + 1} | ${cells.join(' | ')} |\n`;
-  });
-  md += `\n---\n\n`;
+  // ── 2. METHODOLOGY ────────────────────────────────────────────────────────
+  h += '<h2 id="sec2" style="' + S.h2 + '">🔬 Methodology</h2>';
+  h += tag('h3', S.h3, 'Preprocessing Pipeline');
+  h += '<p>Reference and hypothesis pass through the <em>same</em> cleaning pipeline so the comparison is fair — only the actual spoken words are scored:</p>';
+  h += '<ol>';
+  h += '<li><strong>Unicode normalization</strong> — NFC form, so visually-identical glyphs compare equal</li>';
+  h += '<li><strong>Timestamp removal</strong> — SRT arrows <code style="' + S.code + '">00:00:00,000 --&gt; 00:00:05,000</code>, brackets <code style="' + S.code + '">[00:00]</code>, bare <code style="' + S.code + '">HH:MM:SS</code></li>';
+  h += '<li><strong>Speaker labels &amp; stage directions removed</strong> — <code style="' + S.code + '">Speaker 1:</code>, <code style="' + S.code + '">SPEAKER_0:</code>, <code style="' + S.code + '">S1:</code>, <code style="' + S.code + '">[John]</code>, name + colon at line start, bracketed annotations like <code style="' + S.code + '">[laughter]</code> / <code style="' + S.code + '">(applause)</code></li>';
+  h += '<li><strong>Punctuation &amp; symbols stripped</strong> — <code style="' + S.code + '">. , : ; ! ? * « » " \' ։ ՝ ՞ ՛ – — _ # @ / \\ |</code> all become whitespace, so punctuation differences do not count as errors</li>';
+  h += '<li><strong>Case folding</strong> — lowercased (Armenian locale), so capitalization does not count as an error</li>';
+  h += '<li><strong>Whitespace normalization</strong> — runs of whitespace collapsed to a single space</li>';
+  h += '</ol>';
 
-  // ── 4. MODEL-BY-MODEL ANALYSIS ──────────────────────────────────────────────
-  md += `## 🤖 Model-by-Model Analysis\n\n`;
+  h += tag('h3', S.h3, 'Metrics');
+  h += '<pre style="' + S.pre + '">CER           = Levenshtein(chars(ref), chars(hyp)) / len(chars(ref)) × 100\nWER           = Levenshtein(words(ref), words(hyp)) / len(words(ref)) × 100\nChar Accuracy = max(0, 100 − CER)\nBLEU-1        = |{w ∈ hyp : w ∈ ref}| / |hyp| × 100  (unigram precision)</pre>';
+  h += '<blockquote style="' + S.quote + '"><strong>Why CER for Armenian?</strong> Armenian is agglutinative — morphological variants of the same root differ by only a few characters. CER captures these partial matches better than WER, which treats the entire word as wrong for any deviation.</blockquote>';
+
+  h += tag('h3', S.h3, 'Grade Scale');
+  h += tbl(
+    ['Grade','WER Range','CER Range','Interpretation'],
+    [
+      ['🟢 Excellent', '0–10%', '0–10%', 'Production-ready, minimal corrections needed'],
+      ['🟡 Good', '10–25%', '10–25%', 'Usable with light review'],
+      ['🟠 Moderate', '25–50%', '25–50%', 'Requires significant editing'],
+      ['🔴 Poor', '&gt;50%', '&gt;50%', 'Not suitable without full rework'],
+    ]
+  );
+
+  h += tag('h3', S.h3, 'Word-Diff Legend');
+  h += '<div style="' + S.legend + '">In per-segment diffs: ';
+  h += '<span style="background:#fee2e2;color:#b91c1c;text-decoration:line-through;padding:1px 5px;border-radius:3px;font-style:italic;">missed word</span> = in reference, skipped by ASR · ';
+  h += '<mark style="background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;font-weight:700;">extra word</mark> = ASR added, not in reference · plain = correctly transcribed</div>';
+
+  // ── 3. OVERALL RESULTS ────────────────────────────────────────────────────
+  h += '<h2 id="sec3" style="' + S.h2 + '">📈 Overall Results</h2>';
+  h += tag('h3', S.h3, 'Accuracy Rankings');
+  h += tbl(
+    ['Rank','Model','CER ↓','WER ↓','Char Acc ↑','BLEU-1 ↑'],
+    sorted.map((k, i) => {
+      const s = modelStats[k];
+      return [
+        medals[i] || (i + 1),
+        '<strong>' + hEsc(MODEL_DEFS[k]?.label || k) + '</strong>',
+        fmtPct(s.avgCER),
+        fmtPct(s.avgWER),
+        fmtPct(s.avgCharAcc),
+        fmtPct(s.avgBleu1),
+      ];
+    })
+  );
+
+  h += tag('h3', S.h3, 'Per-Segment WER');
+  h += tbl(
+    ['#'].concat(sorted.map(k => hEsc(MODEL_DEFS[k]?.label || k))),
+    rowResults.map((row, i) => [String(i + 1)].concat(sorted.map(k => {
+      const w = row.models[k]?.wer;
+      return w != null ? wg(w) + ' ' + w.toFixed(0) + '%' : '—';
+    })))
+  );
+
+  h += tag('h3', S.h3, 'Per-Segment CER');
+  h += tbl(
+    ['#'].concat(sorted.map(k => hEsc(MODEL_DEFS[k]?.label || k))),
+    rowResults.map((row, i) => [String(i + 1)].concat(sorted.map(k => {
+      const c = row.models[k]?.cer;
+      return c != null ? cg(c) + ' ' + c.toFixed(0) + '%' : '—';
+    })))
+  );
+
+  // ── 4. MODEL-BY-MODEL ANALYSIS ────────────────────────────────────────────
+  h += '<h2 id="sec4" style="' + S.h2 + '">🤖 Model-by-Model Analysis</h2>';
   sorted.forEach((k, i) => {
     const s = modelStats[k];
     const label = MODEL_DEFS[k]?.label || k;
     const cost = COST_AMD[k];
-    md += `### ${medals[i] || (i + 1)} ${label}\n\n`;
-    md += `| Metric | Value | Grade |\n`;
-    md += `|--------|------:|-------|\n`;
-    md += `| CER | ${s.avgCER != null ? s.avgCER.toFixed(2) + '%' : '—'} | ${cg(s.avgCER)} ${gl(s.avgCER)} |\n`;
-    md += `| WER | ${s.avgWER != null ? s.avgWER.toFixed(2) + '%' : '—'} | ${wg(s.avgWER)} ${gl(s.avgWER)} |\n`;
-    md += `| Char Accuracy | ${s.avgCharAcc != null ? s.avgCharAcc.toFixed(2) + '%' : '—'} | — |\n`;
-    md += `| BLEU-1 | ${s.avgBleu1 != null ? s.avgBleu1.toFixed(2) + '%' : '—'} | — |\n`;
-    md += `| Segments tested | ${N} | — |\n\n`;
-    md += `**Cost:** ${cost?.note || MODEL_DEFS[k]?.cost || '?'}\n\n`;
-    const cer = s.avgCER ?? 100, wer = s.avgWER ?? 100;
-    if (cer <= 10 && wer <= 15) {
-      md += `**Verdict:** ✅ Production-ready. Excellent accuracy with minimal character and word errors.\n\n`;
-    } else if (cer <= 25 && wer <= 35) {
-      md += `**Verdict:** 🟡 Good accuracy. Suitable with light review; may produce occasional word-level errors.\n\n`;
-    } else if (cer <= 50 && wer <= 60) {
-      md += `**Verdict:** 🟠 Moderate accuracy. Usable for drafts but requires meaningful post-editing. Not recommended for automated pipelines.\n\n`;
-    } else {
-      md += `**Verdict:** 🔴 Below threshold. High error rates suggest model–data mismatch. Full correction needed before use.\n\n`;
-    }
+    h += '<h3 style="' + S.h3 + '">' + (medals[i] || (i + 1)) + ' ' + hEsc(label) + '</h3>';
+    h += tbl(
+      ['Metric','Value','Grade'],
+      [
+        ['CER', s.avgCER != null ? s.avgCER.toFixed(2) + '%' : '—', (cg(s.avgCER) + ' ' + gl(s.avgCER))],
+        ['WER', s.avgWER != null ? s.avgWER.toFixed(2) + '%' : '—', (wg(s.avgWER) + ' ' + gl(s.avgWER))],
+        ['Char Accuracy', s.avgCharAcc != null ? s.avgCharAcc.toFixed(2) + '%' : '—', '—'],
+        ['BLEU-1', s.avgBleu1 != null ? s.avgBleu1.toFixed(2) + '%' : '—', '—'],
+        ['Segments tested', String(N), '—'],
+      ]
+    );
+    h += '<p><strong>Cost:</strong> ' + hEsc(cost?.note || MODEL_DEFS[k]?.cost || '?') + '</p>';
+    h += '<p><strong>Verdict:</strong> ' + verdict(s.avgCER ?? 100, s.avgWER ?? 100) + '</p>';
   });
-  md += `---\n\n`;
 
-  // ── 5. COST ANALYSIS ────────────────────────────────────────────────────────
-  md += `## 💰 Cost Analysis\n\n`;
-  md += `### Pricing Models\n\n`;
-  md += `| Model | AMD/hr | USD/hr | Notes |\n`;
-  md += `|-------|-------:|-------:|-------|\n`;
-  md += `| Talk to Edit Regular | 0 AMD | $0 | Free tier |\n`;
-  md += `| Hispeech | — | — | Custom — contact vendor |\n`;
-  md += `| Gemini 3 Flash Preview | ~240 AMD | ~$0.60 | Audio: $0.0001875/sec |\n`;
-  md += `| Gemini + System Prompt | ~240 AMD | ~$0.60 | Same as Flash + token overhead |\n`;
-  md += `| Gemini 3.5 Flash Preview | ~240 AMD | ~$0.60 | Audio: $0.0001875/sec |\n`;
-  md += `| Talk to Edit Production | 600 AMD | ~$1.50 | 600 AMD/hr fixed |\n\n`;
+  // ── 5. COST ANALYSIS ──────────────────────────────────────────────────────
+  h += '<h2 id="sec5" style="' + S.h2 + '">💰 Cost Analysis</h2>';
+  h += tag('h3', S.h3, 'Pricing Models');
+  h += tbl(
+    ['Model','AMD/hr','USD/hr','Notes'],
+    [
+      ['Talk to Edit Regular', '0 AMD', '$0', 'Free tier'],
+      ['Hispeech', '—', '—', 'Custom — contact vendor'],
+      ['Gemini 3 Flash Preview', '~240 AMD', '~$0.60', 'Audio: $0.0001875/sec'],
+      ['Gemini + System Prompt', '~240 AMD', '~$0.60', 'Same as Flash + token overhead'],
+      ['Gemini 3.5 Flash Preview', '~240 AMD', '~$0.60', 'Audio: $0.0001875/sec'],
+      ['Talk to Edit Production', '600 AMD', '~$1.50', '600 AMD/hr fixed'],
+    ]
+  );
 
-  md += `### Accuracy-per-Cost Efficiency\n\n`;
-  md += `Efficiency = Char Accuracy ÷ Cost (AMD/hr). Higher = more value per AMD spent.\n\n`;
-  md += `| Model | Char Acc | AMD/hr | Efficiency |\n`;
-  md += `|-------|--------:|-------:|-----------:|\n`;
-  sorted.forEach(k => {
-    const acc = modelStats[k].avgCharAcc ?? 0;
-    const cd = COST_AMD[k];
-    let eff = cd?.amd == null ? '? (unknown cost)' : cd.amd === 0 ? '♾️ ∞ (Free)' : (acc / cd.amd * 100).toFixed(2);
-    md += `| ${escMd(MODEL_DEFS[k]?.label || k)} | ${acc.toFixed(1)}% | ${cd?.amd != null ? cd.amd + ' AMD' : '?'} | ${eff} |\n`;
-  });
-  md += `\n`;
+  h += tag('h3', S.h3, 'Accuracy-per-Cost Efficiency');
+  h += '<p>Efficiency = Char Accuracy ÷ Cost (AMD/hr). Higher = more value per AMD spent.</p>';
+  h += tbl(
+    ['Model','Char Acc','AMD/hr','Efficiency'],
+    sorted.map(k => {
+      const acc = modelStats[k].avgCharAcc ?? 0;
+      const cd = COST_AMD[k];
+      const eff = cd?.amd == null ? '? (unknown cost)' : cd.amd === 0 ? '♾️ ∞ (Free)' : (acc / cd.amd * 100).toFixed(2);
+      return [
+        hEsc(MODEL_DEFS[k]?.label || k),
+        acc.toFixed(1) + '%',
+        cd?.amd != null ? cd.amd + ' AMD' : '?',
+        eff,
+      ];
+    })
+  );
 
-  md += `### Monthly Projection (200 hrs/month)\n\n`;
-  md += `| Model | AMD/month | USD/month |\n`;
-  md += `|-------|----------:|----------:|\n`;
-  sorted.forEach(k => {
-    const cd = COST_AMD[k];
-    if (cd?.amd == null) { md += `| ${escMd(MODEL_DEFS[k]?.label || k)} | ? | ? |\n`; return; }
-    const amdM = cd.amd * 200;
-    md += `| ${escMd(MODEL_DEFS[k]?.label || k)} | ${amdM === 0 ? 'Free' : amdM.toLocaleString() + ' AMD'} | ${amdM === 0 ? 'Free' : '$' + (amdM / 400).toFixed(0)} |\n`;
-  });
-  md += `\n> ⚠️ Gemini pricing approximated at $0.0001875/sec audio input. Verify at the Google AI pricing page. Exchange rate assumed 400 AMD/$1.\n\n`;
-  md += `---\n\n`;
+  h += tag('h3', S.h3, 'Monthly Projection (200 hrs/month)');
+  h += tbl(
+    ['Model','AMD/month','USD/month'],
+    sorted.map(k => {
+      const cd = COST_AMD[k];
+      if (cd?.amd == null) return [hEsc(MODEL_DEFS[k]?.label || k), '?', '?'];
+      const amdM = cd.amd * 200;
+      return [
+        hEsc(MODEL_DEFS[k]?.label || k),
+        amdM === 0 ? 'Free' : amdM.toLocaleString() + ' AMD',
+        amdM === 0 ? 'Free' : '$' + (amdM / 400).toFixed(0),
+      ];
+    })
+  );
+  h += '<blockquote style="' + S.quote + '">⚠️ Gemini pricing approximated at $0.0001875/sec audio input. Verify at the Google AI pricing page. Exchange rate assumed 400 AMD/$1.</blockquote>';
 
-  // ── 6. FINAL RECOMMENDATIONS ────────────────────────────────────────────────
-  md += `## ✅ Final Recommendations\n\n`;
-  md += `**Primary recommendation: ${MODEL_DEFS[best]?.label || best}**\n\n`;
+  // ── 6. FINAL RECOMMENDATIONS ──────────────────────────────────────────────
+  h += '<h2 id="sec6" style="' + S.h2 + '">✅ Final Recommendations</h2>';
+  h += '<p><strong>Primary recommendation: ' + hEsc(MODEL_DEFS[best]?.label || best) + '</strong></p>';
 
-  md += `### Decision Matrix\n\n`;
-  md += `| Use Case | Recommended Model | Reason |\n`;
-  md += `|----------|------------------|--------|\n`;
-  md += `| Highest accuracy | **${escMd(MODEL_DEFS[sorted[0]]?.label || sorted[0])}** | Best CER + WER in this benchmark |\n`;
+  h += tag('h3', S.h3, 'Decision Matrix');
   const freeModel = sorted.find(k => COST_AMD[k]?.amd === 0);
-  if (freeModel) md += `| Zero budget | **${escMd(MODEL_DEFS[freeModel]?.label || freeModel)}** | Free tier, no cost |\n`;
   const paidSorted = sorted.filter(k => (COST_AMD[k]?.amd ?? -1) > 0);
-  if (paidSorted.length) md += `| Best paid value | **${escMd(MODEL_DEFS[paidSorted[0]]?.label || paidSorted[0])}** | Highest accuracy among paid options |\n`;
-  md += `| High-volume production | **${escMd(MODEL_DEFS[sorted[0]]?.label || sorted[0])}** | Best accuracy at scale |\n`;
-  md += `| Experimentation / low risk | **${escMd(MODEL_DEFS[freeModel || sorted[sorted.length - 1]]?.label || '—')}** | Low/no cost for iterating |\n\n`;
+  const decisionRows = [
+    ['Highest accuracy', '<strong>' + hEsc(MODEL_DEFS[sorted[0]]?.label || sorted[0]) + '</strong>', 'Best CER + WER in this benchmark'],
+  ];
+  if (freeModel) decisionRows.push(['Zero budget', '<strong>' + hEsc(MODEL_DEFS[freeModel]?.label || freeModel) + '</strong>', 'Free tier, no cost']);
+  if (paidSorted.length) decisionRows.push(['Best paid value', '<strong>' + hEsc(MODEL_DEFS[paidSorted[0]]?.label || paidSorted[0]) + '</strong>', 'Highest accuracy among paid options']);
+  decisionRows.push(['High-volume production', '<strong>' + hEsc(MODEL_DEFS[sorted[0]]?.label || sorted[0]) + '</strong>', 'Best accuracy at scale']);
+  decisionRows.push(['Experimentation / low risk', '<strong>' + hEsc(MODEL_DEFS[freeModel || sorted[sorted.length - 1]]?.label || '—') + '</strong>', 'Low/no cost for iterating']);
+  h += tbl(['Use Case','Recommended Model','Reason'], decisionRows);
 
-  md += `### ⚠️ Watchouts\n\n`;
-  md += `- CER > 30% for any model suggests the audio quality or dialect may be outside the model's training distribution\n`;
-  md += `- BLEU-1 < 50% can indicate hallucination — ASR generating plausible but incorrect words\n`;
-  md += `- Gemini pricing may change — always verify current rates before committing to production\n`;
-  md += `- This benchmark covers ${N} recordings; expand the test set for higher statistical confidence\n`;
-  md += `- CER is the primary metric for Armenian (agglutinative language) — prioritize it over WER in final decisions\n\n`;
-  md += `---\n\n`;
+  h += tag('h3', S.h3, '⚠️ Watchouts');
+  h += '<ul style="line-height:1.8">';
+  h += '<li>CER &gt; 30% for any model suggests the audio quality or dialect may be outside the model\'s training distribution</li>';
+  h += '<li>BLEU-1 &lt; 50% can indicate hallucination — ASR generating plausible but incorrect words</li>';
+  h += '<li>Gemini pricing may change — always verify current rates before committing to production</li>';
+  h += '<li>This benchmark covers ' + N + ' recordings; expand the test set for higher statistical confidence</li>';
+  h += '<li>CER is the primary metric for Armenian (agglutinative language) — prioritize it over WER in final decisions</li>';
+  h += '</ul>';
 
-  // ── 7. PER-SEGMENT ANALYSIS ─────────────────────────────────────────────────
-  md += `## 📋 Per-Segment Analysis\n\n`;
+  // ── 7. PER-SEGMENT ANALYSIS ───────────────────────────────────────────────
+  h += '<h2 id="sec7" style="' + S.h2 + '">📋 Per-Segment Analysis</h2>';
+  h += '<div style="' + S.legend + '">';
+  h += '<strong>Diff legend:</strong> ';
+  h += '<span style="background:#fee2e2;color:#b91c1c;text-decoration:line-through;padding:1px 5px;border-radius:3px;font-style:italic;">missed</span> · ';
+  h += '<mark style="background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;font-weight:700;">extra (possible hallucination)</mark> · plain = correct';
+  h += '</div>';
+
   rowResults.forEach((row, i) => {
-    const preview = escMd((row.ref || '').slice(0, 60));
-    md += `<details>\n<summary><strong>Segment ${i + 1}:</strong> ${preview}…</summary>\n\n`;
+    const preview = hEsc((row.ref || '').slice(0, 80));
+    h += '<details style="' + S.details + '" open>';
+    h += '<summary style="' + S.summary + '"><strong>Segment ' + (i + 1) + ':</strong> ' + preview + '…</summary>';
+    h += '<div style="' + S.detailsBody + '">';
 
-    // Accuracy table
-    md += `| Model | WER | | CER | | BLEU-1 | Char Acc |\n`;
-    md += `|-------|----:|---|----:|---|-------:|---------:|\n`;
+    // Accuracy table for this segment
+    h += tbl(
+      ['Model','WER','','CER','','BLEU-1','Char Acc'],
+      sorted.filter(k => row.models[k]).map(k => {
+        const m = row.models[k];
+        return [
+          hEsc(MODEL_DEFS[k]?.label || k),
+          fmtPct(m.wer), wg(m.wer),
+          fmtPct(m.cer), cg(m.cer),
+          fmtPct(m.bleu1),
+          fmtPct(m.charAcc),
+        ];
+      })
+    );
+
+    h += '<p style="font-size:.85rem;color:#64748b;margin:14px 0 4px"><strong>📝 REFERENCE (cleaned)</strong></p>';
+    h += '<div style="' + S.refBlock + '">' + hEsc(row.ref || '(empty)') + '</div>';
+
+    h += '<p style="font-size:.85rem;color:#64748b;margin:14px 0 4px"><strong>🔍 WORD-LEVEL DIFFS</strong></p>';
     sorted.forEach(k => {
       const m = row.models[k];
       if (!m) return;
-      const w = m.wer, c = m.cer;
-      md += `| ${escMd(MODEL_DEFS[k]?.label || k)} | ${w != null ? w.toFixed(1) + '%' : '—'} | ${wg(w)} | ${c != null ? c.toFixed(1) + '%' : '—'} | ${cg(c)} | ${m.bleu1 != null ? m.bleu1.toFixed(1) + '%' : '—'} | ${m.charAcc != null ? m.charAcc.toFixed(1) + '%' : '—'} |\n`;
-    });
-    md += `\n`;
-
-    md += `**Reference (cleaned):**\n\n`;
-    md += `> ${escMd(row.ref || '*(empty)*')}\n\n`;
-
-    md += `**Word-level diffs** *(~~deleted~~ · **inserted** · correct)*\n\n`;
-    sorted.forEach(k => {
-      const m = row.models[k];
-      if (!m) return;
-      md += `**${escMd(MODEL_DEFS[k]?.label || k)}:**\n\n${diffMd(row.ref, m.hyp)}\n\n`;
+      h += '<p style="margin:10px 0 4px;font-size:.88rem;font-weight:700;color:' + (MODEL_DEFS[k]?.color || '#1e293b') + '">' + hEsc(MODEL_DEFS[k]?.label || k) + '</p>';
+      h += '<div style="' + S.diffBlock + '">' + diffHtml(row.ref, m.hyp) + '</div>';
     });
 
-    md += `</details>\n\n`;
+    h += '</div></details>';
   });
-  md += `---\n\n`;
 
-  // ── 8. GLOSSARY ─────────────────────────────────────────────────────────────
-  md += `## 📖 Glossary\n\n`;
-  md += `| Term | Definition | Ideal |\n`;
-  md += `|------|-----------|-------|\n`;
-  md += `| **CER** | Character Error Rate — Levenshtein distance at char level ÷ reference chars × 100. Primary metric for Armenian (agglutinative language) | ↓ 0% |\n`;
-  md += `| **WER** | Word Error Rate — Levenshtein distance at word level ÷ reference word count × 100. Standard ASR benchmark | ↓ 0% |\n`;
-  md += `| **Char Accuracy** | 100 − CER. Percentage of characters correctly transcribed | ↑ 100% |\n`;
-  md += `| **BLEU-1** | Unigram precision — % of ASR output words found in reference. Penalizes hallucination | ↑ 100% |\n`;
-  md += `| **Levenshtein Distance** | Minimum single-character (or word) edits — insertions, deletions, substitutions — to transform one string into another | ↓ 0 |\n`;
-  md += `| **ASR** | Automatic Speech Recognition — converting spoken audio to text | — |\n`;
-  md += `| **Agglutinative language** | Language where words form by concatenating morphemes (e.g. Armenian, Turkish, Finnish). Makes WER harsh — one morpheme error = entirely wrong word | — |\n`;
-  md += `| **Hallucination** | When ASR generates plausible-sounding text not present in the audio. Detectable via low BLEU-1 despite seemingly low WER | — |\n`;
-  md += `| **Ground Truth (OG)** | The human-verified reference transcription used as the gold standard for comparison | — |\n`;
-  md += `| **Hypothesis** | The ASR model's output transcription being evaluated against the ground truth | — |\n`;
-  md += `| **Preprocessing** | Cleaning pipeline applied to both reference and hypothesis before metric calculation: removes timestamps, speaker labels, normalizes whitespace | — |\n`;
-  md += `| **SRT** | SubRip Subtitle format — common subtitle file format with timestamps like \`00:00:01,000 --> 00:00:04,000\` | — |\n`;
-  md += `| **LCS** | Longest Common Subsequence — algorithm used to align reference and hypothesis words for diff display, maximizing matched words | — |\n\n`;
-  md += `---\n\n`;
-  md += `*Report generated by ASR Comparison Tool — all processing done locally in your browser. No data leaves your device.*\n`;
+  // ── 8. GLOSSARY ───────────────────────────────────────────────────────────
+  h += '<h2 id="sec8" style="' + S.h2 + '">📖 Glossary</h2>';
+  h += tbl(
+    ['Term','Definition','Ideal'],
+    [
+      ['<strong>CER</strong>', 'Character Error Rate — Levenshtein distance at char level ÷ reference chars × 100. Primary metric for Armenian (agglutinative language)', '↓ 0%'],
+      ['<strong>WER</strong>', 'Word Error Rate — Levenshtein distance at word level ÷ reference word count × 100. Standard ASR benchmark', '↓ 0%'],
+      ['<strong>Char Accuracy</strong>', '100 − CER. Percentage of characters correctly transcribed', '↑ 100%'],
+      ['<strong>BLEU-1</strong>', 'Unigram precision — % of ASR output words found in reference. Penalizes hallucination', '↑ 100%'],
+      ['<strong>Levenshtein Distance</strong>', 'Minimum single-character (or word) edits — insertions, deletions, substitutions — to transform one string into another', '↓ 0'],
+      ['<strong>ASR</strong>', 'Automatic Speech Recognition — converting spoken audio to text', '—'],
+      ['<strong>Agglutinative language</strong>', 'Language where words form by concatenating morphemes (e.g. Armenian, Turkish, Finnish). Makes WER harsh — one morpheme error = entirely wrong word', '—'],
+      ['<strong>Hallucination</strong>', 'When ASR generates plausible-sounding text not present in the audio. Detectable via low BLEU-1 despite seemingly low WER', '—'],
+      ['<strong>Ground Truth (OG)</strong>', 'The human-verified reference transcription used as the gold standard for comparison', '—'],
+      ['<strong>Hypothesis</strong>', 'The ASR model\'s output transcription being evaluated against the ground truth', '—'],
+      ['<strong>Preprocessing</strong>', 'Cleaning pipeline applied to both reference and hypothesis before metric calculation: removes timestamps, speaker labels, normalizes whitespace', '—'],
+      ['<strong>SRT</strong>', 'SubRip Subtitle format — common subtitle file format with timestamps like <code style="' + S.code + '">00:00:01,000 --&gt; 00:00:04,000</code>', '—'],
+      ['<strong>LCS</strong>', 'Longest Common Subsequence — algorithm used to align reference and hypothesis words for diff display, maximizing matched words', '—'],
+    ]
+  );
+
+  // ── FOOTER ────────────────────────────────────────────────────────────────
+  h += '<div style="' + S.footer + '">Report generated by ASR Comparison Tool — all processing done locally in your browser. No data leaves your device.</div>';
+  h += '\n</body>\n</html>';
 
   // Download
-  const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+  const blob = new Blob([h], { type: 'text/html;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `asr-comparison-report-${now}.md`;
+  a.download = 'asr-comparison-report-' + now + '.html';
   a.click();
   URL.revokeObjectURL(url);
 }
