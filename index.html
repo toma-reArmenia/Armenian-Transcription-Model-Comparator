@@ -361,6 +361,20 @@ function getDurationFromRow(row) {
   return null;
 }
 
+// Pulls a human-readable recording identifier from the row's metadata
+// columns (Name / file / audio / recording / clip / track / id). Used as
+// the "Segment ID / Recording Name" line in the cost report.
+function getRecordingNameFromRow(row) {
+  if (!row || typeof row !== 'object') return null;
+  for (const k of Object.keys(row)) {
+    if (/^(?:name|filename|file|audio|recording|clip|track|id|recording_?name|audio_?file)$/i.test(k)) {
+      const v = row[k];
+      if (v != null && String(v).trim()) return String(v).trim();
+    }
+  }
+  return null;
+}
+
 // Cost-AMD reference for built-in models (used by hourly-billed entries).
 const COST_AMD_BUILTIN = {
   high_speech:       { amd: null, note: 'Custom pricing (contact vendor)' },
@@ -374,107 +388,155 @@ const COST_AMD_BUILTIN = {
 function computeAnyModelSegmentCost(modelKey, columnName, ogText, hypText, sourceRow) {
   const durSec = estimateDurationSec(ogText, sourceRow);
   const durationFromCsv = !!getDurationFromRow(sourceRow);
+  const recordingName = getRecordingNameFromRow(sourceRow);
+  const common = { durSec, durationFromCsv, recordingName };
 
   if (isGeminiModel(modelKey)) {
     const pricing = modelPricing(modelKey, columnName);
     const c = computeSegmentCost(ogText, hypText, pricing, sourceRow);
-    return { kind: 'token', durSec, durationFromCsv, pricing, ...c };
+    return { kind: 'token', ...common, pricing, ...c };
   }
 
   const cd = COST_AMD_BUILTIN[modelKey];
   if (cd) {
     if (cd.amd === 0) {
-      return { kind: 'free', durSec, durationFromCsv, note: cd.note, totalCost: 0 };
+      return { kind: 'free', ...common, note: cd.note, totalCost: 0 };
     }
     if (typeof cd.amd === 'number') {
       const amdCost = durSec / 3600 * cd.amd;
       const usdCost = amdCost / 400;
       return {
-        kind: 'hourly', durSec, durationFromCsv,
+        kind: 'hourly', ...common,
         hourlyRateAMD: cd.amd, hourlyRateUSD: cd.amd / 400,
         amdCost, usdCost, totalCost: usdCost, note: cd.note,
       };
     }
-    return { kind: 'unknown', durSec, durationFromCsv, note: cd.note };
+    return { kind: 'unknown', ...common, note: cd.note };
   }
 
-  return { kind: 'unknown', durSec, durationFromCsv, note: 'No pricing configured for this column.' };
+  return { kind: 'unknown', ...common, note: 'No pricing configured for this column.' };
 }
 
-// HTML render for a per-segment cost breakdown. Switches on cost.kind:
-//   token   → full token-by-token Gemini breakdown (audio / SP / output / thinking)
-//   hourly  → recording duration × hourly rate
-//   free    → "Free tier" panel
-//   unknown → "no pricing configured" panel
-// All four use the same blue card style so the segment view stays consistent.
-function renderCostPanelHtml(cost, modelLabel) {
+// HTML render for a per-segment cost breakdown.
+//
+// Layout follows the user's spec:
+//   Segment ID / Recording Name
+//   Model Used: <interpreted descriptor>
+//   Input Breakdown:  audio (+SP if applicable)  →  Total Input × rate = $X
+//   Output Breakdown: text + thinking            →  Total Output × rate = $Y
+//   Total Financial Cost for Segment: $0.00XXXX
+//
+// Switches on cost.kind: token / hourly / free / unknown.
+function renderCostPanelHtml(cost, modelLabel, segmentIdx) {
   if (!cost) return '';
 
-  const card = (color, bg, border, head, body, note) =>
-    '<div style="margin-top:10px;padding:10px 14px;background:' + bg + ';border:1px solid ' + border + ';border-radius:4px;font-size:.84rem">'
-    + '<div style="font-weight:700;color:' + color + ';margin-bottom:6px">💰 ' + head + '</div>'
-    + body
-    + (note ? '<div style="margin-top:6px;font-size:.72rem;color:#64748b;font-style:italic">' + note + '</div>' : '')
+  const _hEsc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const segId = (segmentIdx != null) ? ('Segment ' + (segmentIdx + 1)) : 'This segment';
+  const recName = cost.recordingName ? ' · <strong>' + _hEsc(cost.recordingName) + '</strong>' : '';
+  const durSrc = cost.durationFromCsv
+    ? '<strong>' + cost.durSec.toFixed(2) + 's</strong> (from CSV)'
+    : '~' + cost.durSec.toFixed(1) + 's <em style="color:#94a3b8">(est. from OG @ 150 wpm)</em>';
+
+  const card = (color, bg, border, head, body) =>
+    '<div style="margin-top:10px;padding:12px 14px;background:' + bg + ';border:1px solid ' + border + ';border-radius:6px;font-size:.86rem">'
+    + '<div style="font-weight:700;color:' + color + ';margin-bottom:8px;font-size:.95rem">💰 Cost for this segment</div>'
+    + head + body
     + '</div>';
 
-  const _hEsc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  const durSrc = cost.durationFromCsv
-    ? '<strong>' + cost.durSec.toFixed(2) + 's</strong> (from CSV duration column)'
-    : '~' + cost.durSec.toFixed(1) + 's <em style="color:#94a3b8">(estimated from OG text @ 150 wpm — add a <code style="background:#fff;padding:1px 4px;border-radius:3px">duration_sec</code> column for exact numbers)</em>';
+  // Shared "Segment / Recording / Model Used" header rows
+  const headerRows = (modelUsed) =>
+      '<div style="display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:.82rem;color:#334155;margin-bottom:8px">'
+    + '<div style="color:#64748b">Segment:</div><div>' + segId + recName + ' &nbsp;·&nbsp; ' + durSrc + '</div>'
+    + '<div style="color:#64748b">Model Used:</div><div>' + modelUsed + '</div>'
+    + '</div>';
+
+  // Total Financial Cost row (consistent across all kinds)
+  const totalRow = (usd, amd) =>
+      '<div style="margin-top:10px;padding:8px 12px;background:#e0f2fe;border-radius:4px;font-weight:700;font-size:.92rem;display:flex;justify-content:space-between;align-items:center">'
+    + '<span style="color:#0369a1">Total Financial Cost for Segment:</span>'
+    + '<span style="font-variant-numeric:tabular-nums;color:#0c4a6e">'
+    + (amd != null ? amd.toFixed(2) + ' AMD · ' : '')
+    + '$' + usd.toFixed(6) + '</span></div>';
 
   if (cost.kind === 'token') {
     const p = cost.pricing;
-    let body = '<div style="font-size:.78rem;color:#475569;margin-bottom:6px">Recording duration: ' + durSrc + '</div>';
-    body += '<table style="border-collapse:collapse;width:100%;font-size:.84rem">'
-      + '<thead><tr style="color:#0c4a6e">'
-      + '<th style="text-align:left;padding:3px 6px;border-bottom:1px solid #bae6fd">Component</th>'
-      + '<th style="text-align:right;padding:3px 6px;border-bottom:1px solid #bae6fd">Tokens</th>'
-      + '<th style="text-align:right;padding:3px 6px;border-bottom:1px solid #bae6fd">Rate</th>'
-      + '<th style="text-align:right;padding:3px 6px;border-bottom:1px solid #bae6fd">Cost (USD)</th>'
-      + '</tr></thead><tbody>';
-    const tokRow = (label, tokens, rate, c) => '<tr>'
-      + '<td style="padding:3px 6px">' + label + '</td>'
-      + '<td style="text-align:right;padding:3px 6px;font-variant-numeric:tabular-nums">' + tokens.toLocaleString() + '</td>'
-      + '<td style="text-align:right;padding:3px 6px;color:#64748b">$' + rate.toFixed(2) + '/1M</td>'
-      + '<td style="text-align:right;padding:3px 6px;font-variant-numeric:tabular-nums">$' + c.toFixed(6) + '</td></tr>';
-    body += tokRow('Audio input (' + cost.durSec.toFixed(1) + 's @ 32 tok/s)', cost.audioTokens, p.inputPer1M, cost.audioTokens * p.inputPer1M / 1e6);
-    if (cost.spTokens) body += tokRow('System prompt (fixed 680 tok)', cost.spTokens, p.inputPer1M, cost.spTokens * p.inputPer1M / 1e6);
-    body += tokRow('Output text (model transcription)', cost.outputTextTokens, p.outputPer1M, cost.outputTextTokens * p.outputPer1M / 1e6);
-    body += tokRow('Thinking tokens (' + p.thinkingLevel + ', invisible)', cost.thinkingTokens, p.outputPer1M, cost.thinkingTokens * p.outputPer1M / 1e6);
-    body += '<tr style="font-weight:700;background:#e0f2fe">'
-      + '<td style="padding:6px;border-top:2px solid #0369a1" colspan="3">Total this segment</td>'
-      + '<td style="text-align:right;padding:6px;border-top:2px solid #0369a1;font-variant-numeric:tabular-nums">$' + cost.totalCost.toFixed(6) + '</td></tr>';
-    body += '</tbody></table>';
-    return card('#0369a1', '#f0f9ff', '#bae6fd',
-      'Tokens &amp; cost · ' + _hEsc(modelLabel) + ' · ' + p.tier + (p.hasSP ? ' + SP' : '') + ' · ' + p.thinkingLevel + '-thinking',
-      body, null);
+    const tierName = p.tier.includes('3.5') ? 'Gemini 3.5 Flash' : 'Gemini 3.0 Flash Preview';
+    const thinkName = p.thinkingLevel === 'high' ? 'High Thinking' : 'Low Thinking';
+    const sp = p.hasSP ? ' + System Prompt' : '';
+    const modelUsed = '<strong>' + _hEsc(modelLabel) + '</strong>'
+      + ' &nbsp;<em style="color:#64748b">(' + tierName + ' — ' + thinkName + sp + ')</em>';
+
+    // Subtotal helpers
+    const inAudio = cost.audioTokens;
+    const inSP    = cost.spTokens;
+    const inTotal = inAudio + inSP;
+    const outText = cost.outputTextTokens;
+    const outThink = cost.thinkingTokens;
+    const outTotal = outText + outThink;
+    const inputCost  = inTotal  * p.inputPer1M  / 1e6;
+    const outputCost = outTotal * p.outputPer1M / 1e6;
+
+    const breakdownRow = (label, tokens, sub) =>
+        '<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:.82rem">'
+      + '<span style="color:#475569">' + label + '</span>'
+      + '<span style="font-variant-numeric:tabular-nums;color:#334155">' + tokens.toLocaleString() + ' tok'
+      + (sub != null ? ' &nbsp;·&nbsp; $' + sub.toFixed(6) : '')
+      + '</span></div>';
+    const subtotalRow = (label, tokens, rate, cost, color) =>
+        '<div style="display:flex;justify-content:space-between;padding:6px 0 4px;border-top:1px dashed #bae6fd;margin-top:4px;font-weight:700;font-size:.85rem">'
+      + '<span style="color:' + color + '">' + label + '</span>'
+      + '<span style="font-variant-numeric:tabular-nums;color:' + color + '">' + tokens.toLocaleString() + ' tok × $' + rate.toFixed(2) + '/1M = <strong>$' + cost.toFixed(6) + '</strong></span></div>';
+
+    const body = ''
+      // INPUT
+      + '<div style="margin-top:4px;padding:8px 12px;background:#ffffff;border:1px solid #bae6fd;border-radius:4px">'
+      + '<div style="font-weight:700;color:#0369a1;margin-bottom:4px">Input Breakdown</div>'
+      + breakdownRow('Audio (' + cost.durSec.toFixed(1) + 's @ 32 tok/s)', inAudio, inAudio * p.inputPer1M / 1e6)
+      + (inSP ? breakdownRow('System Prompt (fixed)', inSP, inSP * p.inputPer1M / 1e6) : '')
+      + subtotalRow('Total Input', inTotal, p.inputPer1M, inputCost, '#0c4a6e')
+      + '</div>'
+      // OUTPUT
+      + '<div style="margin-top:8px;padding:8px 12px;background:#ffffff;border:1px solid #bae6fd;border-radius:4px">'
+      + '<div style="font-weight:700;color:#0369a1;margin-bottom:4px">Output Breakdown</div>'
+      + breakdownRow('Transcription text', outText, outText * p.outputPer1M / 1e6)
+      + breakdownRow('Thinking tokens (' + p.thinkingLevel + ', invisible)', outThink, outThink * p.outputPer1M / 1e6)
+      + subtotalRow('Total Output', outTotal, p.outputPer1M, outputCost, '#0c4a6e')
+      + '</div>'
+      + totalRow(cost.totalCost);
+
+    return card('#0369a1', '#f0f9ff', '#bae6fd', headerRows(modelUsed), body);
   }
 
   if (cost.kind === 'hourly') {
-    const body = '<table style="border-collapse:collapse;width:100%;font-size:.84rem">'
-      + '<tr><td style="padding:3px 6px">Recording duration</td><td style="text-align:right;padding:3px 6px">' + durSrc + '</td></tr>'
-      + '<tr><td style="padding:3px 6px">Rate</td><td style="text-align:right;padding:3px 6px">' + cost.hourlyRateAMD + ' AMD/hr (~$' + cost.hourlyRateUSD.toFixed(2) + '/hr)</td></tr>'
-      + '<tr style="font-weight:700;background:#e0f2fe"><td style="padding:6px;border-top:2px solid #0369a1">Cost this segment</td>'
-      + '<td style="text-align:right;padding:6px;border-top:2px solid #0369a1;font-variant-numeric:tabular-nums">'
-      + cost.amdCost.toFixed(2) + ' AMD · $' + cost.usdCost.toFixed(6) + '</td></tr></table>';
-    return card('#0369a1', '#f0f9ff', '#bae6fd',
-      'Hourly billing · ' + _hEsc(modelLabel), body, _hEsc(cost.note || ''));
+    const modelUsed = '<strong>' + _hEsc(modelLabel) + '</strong> <em style="color:#64748b">(hourly billing)</em>';
+    const body = ''
+      + '<div style="margin-top:4px;padding:8px 12px;background:#ffffff;border:1px solid #bae6fd;border-radius:4px;font-size:.82rem">'
+      + '<div style="display:flex;justify-content:space-between"><span style="color:#475569">Rate</span><span style="font-variant-numeric:tabular-nums">' + cost.hourlyRateAMD + ' AMD/hr (~$' + cost.hourlyRateUSD.toFixed(2) + '/hr)</span></div>'
+      + '<div style="display:flex;justify-content:space-between;margin-top:4px"><span style="color:#475569">Duration this segment</span><span style="font-variant-numeric:tabular-nums">' + cost.durSec.toFixed(2) + ' s</span></div>'
+      + '<div style="margin-top:6px;font-size:.72rem;color:#64748b;font-style:italic">' + _hEsc(cost.note || '') + '</div>'
+      + '</div>'
+      + totalRow(cost.usdCost, cost.amdCost);
+    return card('#0369a1', '#f0f9ff', '#bae6fd', headerRows(modelUsed), body);
   }
 
   if (cost.kind === 'free') {
-    return card('#15803d', '#f0fdf4', '#bbf7d0',
-      'Free tier · ' + _hEsc(modelLabel),
-      '<div style="font-size:.85rem">Recording duration: ' + durSrc + '</div>'
-      + '<div style="margin-top:6px"><strong style="color:#15803d">No cost for this segment.</strong></div>',
-      _hEsc(cost.note || ''));
+    const modelUsed = '<strong>' + _hEsc(modelLabel) + '</strong> <em style="color:#15803d">(free tier)</em>';
+    const body = ''
+      + '<div style="margin-top:4px;padding:8px 12px;background:#ffffff;border:1px solid #bbf7d0;border-radius:4px;color:#15803d;font-weight:700">No cost for this segment.</div>'
+      + '<div style="margin-top:10px;padding:8px 12px;background:#dcfce7;border-radius:4px;font-weight:700;font-size:.92rem;display:flex;justify-content:space-between;align-items:center">'
+      + '<span style="color:#15803d">Total Financial Cost for Segment:</span>'
+      + '<span style="color:#15803d;font-variant-numeric:tabular-nums">$0.00 (free)</span></div>';
+    return card('#15803d', '#f0fdf4', '#bbf7d0', headerRows(modelUsed), body);
   }
 
   // unknown
-  return card('#64748b', '#f8fafc', '#e2e8f0',
-    'Pricing not configured · ' + _hEsc(modelLabel),
-    '<div style="font-size:.85rem">Recording duration: ' + durSrc + '</div>'
-    + '<div style="margin-top:6px;color:#64748b">' + _hEsc(cost.note || 'No pricing data available for this column.') + '</div>',
-    'To enable cost calculation, tell me the per-hour or per-token rate for this model.');
+  const modelUsed = '<strong>' + _hEsc(modelLabel) + '</strong> <em style="color:#94a3b8">(no pricing configured)</em>';
+  const body = ''
+    + '<div style="margin-top:4px;padding:8px 12px;background:#ffffff;border:1px solid #e2e8f0;border-radius:4px;color:#64748b;font-size:.82rem">'
+    + _hEsc(cost.note || 'No pricing data available for this column.')
+    + '<br><span style="font-size:.72rem;font-style:italic">Provide a rate (AMD/hr or $/1M tokens) to enable cost calculation.</span>'
+    + '</div>';
+  return card('#64748b', '#f8fafc', '#e2e8f0', headerRows(modelUsed), body);
 }
 
 // ══════════════════════════════════════════════
@@ -1872,7 +1934,7 @@ function generateReport() {
       // ── Universal per-segment cost panel — every model gets one ──────
       const colName = colMapping[k] || '';
       const cost = computeAnyModelSegmentCost(k, colName, row.rawRef, m.rawHyp, csvData[row.idx]);
-      h += renderCostPanelHtml(cost, hEsc(MODEL_DEFS[k]?.label || k));
+      h += renderCostPanelHtml(cost, hEsc(MODEL_DEFS[k]?.label || k), i);
 
       h += '</div>';
     });
