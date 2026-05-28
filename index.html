@@ -365,6 +365,10 @@ function autoMapAndAnalyze() {
     return;
   }
 
+  // Auto-register any remaining columns as custom model columns so a new
+  // CSV column is picked up without code changes.
+  registerDynamicModelColumns();
+
   document.getElementById('uploadSection').classList.add('hidden');
   document.getElementById('resultsSection').classList.remove('hidden');
   document.getElementById('resetBtn').classList.remove('hidden');
@@ -543,7 +547,60 @@ function bleu1(ref, hyp) {
 // ══════════════════════════════════════════════
 //  ANALYSIS
 // ══════════════════════════════════════════════
-const MODEL_KEYS = Object.keys(MODEL_DEFS);
+// Snapshot of the keys defined statically at script load. We use this so we
+// can prune dynamic (user-CSV-only) keys before re-running auto-detect on a
+// fresh CSV — otherwise extra columns from a previous CSV would linger.
+const STATIC_MODEL_KEYS = Object.keys(MODEL_DEFS);
+
+// Live model-key list — picks up dynamic columns registered at runtime.
+// Used at every analysis/render point so newly-added CSV columns appear.
+function allModelKeys() { return Object.keys(MODEL_DEFS); }
+
+// Palette for unknown columns
+const DYNAMIC_COLOR_PALETTE = ['#0ea5e9', '#84cc16', '#f97316', '#ec4899', '#14b8a6', '#a855f7', '#eab308', '#06b6d4', '#10b981', '#f43f5e'];
+
+// Header looks like metadata (file path, duration, ID etc.) — skip it for
+// model auto-registration. Recognised by name only; if the user has a column
+// that matches one of these but actually contains transcription, they should
+// rename it.
+function isMetadataHeader(h) {
+  return /^(?:duration_?sec|duration|seconds|secs|length_?sec|audio_?duration|file|files|filename|filepath|audio|media|recording|note|notes|comment|comments|id|index|num|number|row|timestamp)$/i.test(h);
+}
+
+// After standard auto-detect runs, any column that's not the OG, not flagged
+// as a file/metadata column, and not already consumed by a known model key is
+// promoted to a dynamic model with the column name as its label. This means
+// new columns the user adds to the CSV are picked up automatically.
+function registerDynamicModelColumns() {
+  // 1. Clear any dynamic entries left over from a previous CSV
+  Object.keys(MODEL_DEFS).forEach(k => {
+    if (!STATIC_MODEL_KEYS.includes(k)) {
+      delete MODEL_DEFS[k];
+      delete colMapping[k];
+    }
+  });
+
+  // 2. Build the set of headers already accounted for
+  const consumed = new Set(Object.values(colMapping).filter(Boolean));
+
+  // 3. Walk csvHeaders; register the rest as custom models
+  let paletteIdx = 0;
+  csvHeaders.forEach(h => {
+    if (consumed.has(h)) return;
+    if (isMetadataHeader(h)) return;
+    const key = 'custom_' + h.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase().replace(/_+/g, '_').replace(/^_|_$/g, '');
+    // Avoid colliding with static keys or each other
+    let unique = key;
+    let n = 2;
+    while (MODEL_DEFS[unique]) unique = key + '_' + (n++);
+    MODEL_DEFS[unique] = {
+      label: h,
+      color: DYNAMIC_COLOR_PALETTE[paletteIdx++ % DYNAMIC_COLOR_PALETTE.length],
+      cost: '?',
+    };
+    colMapping[unique] = h;
+  });
+}
 
 function runAnalysisFromUI() {
   colMapping = {};
@@ -552,6 +609,9 @@ function runAnalysisFromUI() {
     const val = sel.value;
     colMapping[key] = val === '— Not in CSV —' ? null : val;
   });
+  // Even from the manual mapper, register any columns the user left
+  // unmapped as custom models so nothing in the CSV is silently dropped.
+  registerDynamicModelColumns();
   document.getElementById('mappingSection').classList.add('hidden');
   document.getElementById('resultsSection').classList.remove('hidden');
   document.getElementById('resetBtn').classList.remove('hidden');
@@ -563,8 +623,9 @@ function runAnalysis() {
   if (!colMapping.og) return alert('Could not detect the OG (Reference) column. Please check your CSV headers.');
 
 
-  // Run metrics per row per model
-  const modelKeys = MODEL_KEYS.filter(k => colMapping[k]);
+  // Run metrics per row per model — uses live key list so dynamic
+  // (CSV-only) columns are picked up.
+  const modelKeys = allModelKeys().filter(k => colMapping[k]);
   const rowResults = csvData.map((row, i) => {
     const rawRef = row[colMapping.og] || '';
     const ref = preprocessText(rawRef);
