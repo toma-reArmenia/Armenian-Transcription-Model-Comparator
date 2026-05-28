@@ -258,16 +258,41 @@ const SYSTEM_PROMPT_TOKENS = 680;
 const AUDIO_TOKENS_PER_SEC = 32;       // Gemini audio tokenisation rate
 const WORDS_PER_MIN_EST    = 150;       // average speech rate for duration estimation
 
-function isGeminiModel(k)      { return GEMINI_PRICING_BASE[k] != null; }
-function detectThinking(name)  { return /\(\s*high\b/i.test(name) ? 'high' : /\(\s*low\b/i.test(name) ? 'low' : null; }
+// A column counts as a Gemini model if it has a static built-in pricing entry
+// OR if registerDynamicModelColumns tagged it as a Gemini family variant.
+function isGeminiModel(k) {
+  if (GEMINI_PRICING_BASE[k] != null) return true;
+  return !!MODEL_DEFS[k]?.geminiKind;
+}
+// More lenient now — works with or without parentheses, so "Gemini 3.5
+// Flash Preview High" and "Gemini 3 FP (Low)" both resolve.
+function detectThinking(name)  {
+  if (/\bhigh\b/i.test(name)) return 'high';
+  if (/\blow\b/i.test(name))  return 'low';
+  return null;
+}
 function detectSysPrompt(name) { return /system\s*prompt|\+\s*sp\b|\bwith\s+sp\b/i.test(name); }
 function detectTier(name) {
   if (/3\.5/.test(name) || /3\s*5/.test(name)) return '3.5';
   return '3.0';
 }
+// Resolve a column header to a Gemini base key based on its name. Returns
+// 'gemini_flash' for any 3.5 variant, 'gemini_sp' for any SP variant
+// (assumed 3.0 base unless tier says otherwise), 'gemini_flash_prev' for
+// any other "Gemini Flash" naming, or null if it doesn't look like Gemini.
+function detectGeminiKindFromHeader(h) {
+  if (!/gemini/i.test(h)) return null;
+  if (detectTier(h) === '3.5') return 'gemini_flash';
+  if (detectSysPrompt(h))      return 'gemini_sp';
+  if (/flash/i.test(h))        return 'gemini_flash_prev';
+  return null;
+}
 
 function modelPricing(modelKey, columnName) {
-  const base = GEMINI_PRICING_BASE[modelKey];
+  // Dynamically-registered Gemini columns carry a `geminiKind` tag pointing
+  // at the closest built-in base. Honour that first.
+  const dynKind = MODEL_DEFS[modelKey]?.geminiKind;
+  const base = GEMINI_PRICING_BASE[modelKey] || GEMINI_PRICING_BASE[dynKind];
   if (!base) return null;
   const colName = columnName || '';
   // Column may override tier (e.g. SP column actually using 3.5)
@@ -767,10 +792,21 @@ function registerDynamicModelColumns() {
     let unique = key;
     let n = 2;
     while (MODEL_DEFS[unique]) unique = key + '_' + (n++);
+
+    // If the column header looks like a Gemini variant we already know how
+    // to price, tag it so modelPricing() / isGeminiModel() route it through
+    // the built-in pricing base. Inherits the colour of that base so two
+    // Gemini variants don't get unrelated palette colours.
+    const geminiKind = detectGeminiKindFromHeader(h);
+    const color = geminiKind
+      ? (MODEL_DEFS[geminiKind]?.color || DYNAMIC_COLOR_PALETTE[paletteIdx++ % DYNAMIC_COLOR_PALETTE.length])
+      : DYNAMIC_COLOR_PALETTE[paletteIdx++ % DYNAMIC_COLOR_PALETTE.length];
+
     MODEL_DEFS[unique] = {
       label: h,
-      color: DYNAMIC_COLOR_PALETTE[paletteIdx++ % DYNAMIC_COLOR_PALETTE.length],
+      color,
       cost: '?',
+      ...(geminiKind ? { geminiKind } : {}),
     };
     colMapping[unique] = h;
   });
