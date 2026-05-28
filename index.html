@@ -563,8 +563,11 @@ const DYNAMIC_COLOR_PALETTE = ['#0ea5e9', '#84cc16', '#f97316', '#ec4899', '#14b
 // model auto-registration. Recognised by name only; if the user has a column
 // that matches one of these but actually contains transcription, they should
 // rename it.
+// Exact-match (case-insensitive) header names that should NEVER be treated as
+// model output columns. Anything not on this list and not consumed by the
+// built-in auto-detect is registered as a model.
 function isMetadataHeader(h) {
-  return /^(?:duration_?sec|duration|seconds|secs|length_?sec|audio_?duration|file|files|filename|filepath|audio|media|recording|note|notes|comment|comments|id|index|num|number|row|timestamp)$/i.test(h);
+  return /^(?:duration_?sec|duration|seconds|secs|length_?sec|audio_?duration|file|files|filename|filepath|audio|media|recording|note|notes|comment|comments|id|index|num|number|row|timestamp|name|names|title|titles|speaker|speakers|person|persons|participant|participants|label|labels|category|categories|type|types|tag|tags|date|time|status|topic|topics|language|lang)$/i.test(h);
 }
 
 // After standard auto-detect runs, any column that's not the OG, not flagged
@@ -1499,17 +1502,24 @@ function generateReport() {
 
   // ── 5. COST ANALYSIS ──────────────────────────────────────────────────────
   h += '<h2 id="sec5" style="' + S.h2 + '">💰 Cost Analysis</h2>';
+  // Dynamic pricing table — only the models actually present in the CSV.
+  // Static built-in pricing for known model keys; '?' for any custom column.
   h += tag('h3', S.h3, 'Pricing Models');
   h += tbl(
     ['Model','AMD/hr','USD/hr','Notes'],
-    [
-      ['Talk to Edit Regular', '0 AMD', '$0', 'Free tier'],
-      ['Hispeech', '—', '—', 'Custom — contact vendor'],
-      ['Gemini 3 Flash Preview', '~240 AMD', '~$0.60', 'Audio: $0.0001875/sec'],
-      ['Gemini + System Prompt', '~240 AMD', '~$0.60', 'Same as Flash + token overhead'],
-      ['Gemini 3.5 Flash Preview', '~240 AMD', '~$0.60', 'Audio: $0.0001875/sec'],
-      ['Talk to Edit Production', '600 AMD', '~$1.50', '600 AMD/hr fixed'],
-    ]
+    sorted.map(k => {
+      const cd = COST_AMD[k];
+      const label = hEsc(MODEL_DEFS[k]?.label || k);
+      if (!cd) return [label, '?', '?', '<em style="color:#94a3b8">No built-in pricing for this column — provide rate to compute.</em>'];
+      if (cd.amd == null)  return [label, '—', '—', hEsc(cd.note || 'Custom — contact vendor')];
+      const usd = (cd.amd / 400).toFixed(2);
+      return [
+        label,
+        cd.amd === 0 ? '0 AMD' : '~' + cd.amd + ' AMD',
+        cd.amd === 0 ? '$0' : '~$' + usd,
+        hEsc(cd.note || ''),
+      ];
+    })
   );
 
   h += tag('h3', S.h3, 'Accuracy-per-Cost Efficiency');
