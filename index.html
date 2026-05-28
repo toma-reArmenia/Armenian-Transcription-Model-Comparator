@@ -589,10 +589,15 @@ function autoDetect(key, headers) {
     skip_files: [/file/i, /media/i, /record/i, /audio/i],
     high_speech: [/hispeech/i, /hi.?speech/i, /high.?speech/i, /highspeech/i],
     talk_prod: [/talk.*prod/i, /talk.*edit.*prod/i, /production/i],
-    gemini_flash_prev: [/gemini.*3\s*flash.*prev/i, /gemini.*flash.*prev(?!.*3\.5)/i, /gemini.*3\s*prev/i],
+    // The 2nd pattern excludes "3.5" anywhere in the header (anchored lookahead
+    // at start-of-string), so "Gemini 3.5 Flash Preview" can NOT match
+    // gemini_flash_prev — it must be claimed by gemini_flash instead.
+    gemini_flash_prev: [/gemini.*3\s*flash.*prev/i, /^(?!.*3\.5).*gemini.*flash.*prev/i, /gemini.*3\s*prev/i],
     gemini_sp: [/gemini.*sp\b/i, /gemini.*system/i, /system.?prompt/i, /with.?sp/i],
     talk_regular: [/talk.*regular/i, /talk.*edit.*reg/i, /regular/i],
-    gemini_flash: [/gemini.*3\.5/i, /3\.5.*flash/i, /gemini.*flash(?!.*prev)/i, /^gemini.?flash$/i],
+    // Only 3.5 variants (and bare "Gemini Flash" — i.e. no preview, no SP) —
+    // anything else Gemini-shaped should go to gemini_flash_prev or gemini_sp.
+    gemini_flash: [/gemini.*3\.5/i, /3\.5.*flash/i, /^gemini[\s.-]?flash$/i],
   };
   const ps = patterns[key] || [];
   for (const h of headers) {
@@ -805,7 +810,11 @@ function registerDynamicModelColumns() {
     MODEL_DEFS[unique] = {
       label: h,
       color,
-      cost: '?',
+      // Inherit the static base's cost STRING so the on-page "Cost vs
+      // Accuracy" table (which reads MODEL_DEFS[k].cost directly) shows
+      // the right rate for dynamic Gemini variants. The per-segment
+      // token panel already routed correctly via geminiKind.
+      cost: geminiKind ? (MODEL_DEFS[geminiKind]?.cost || '?') : '?',
       ...(geminiKind ? { geminiKind } : {}),
     };
     colMapping[unique] = h;
@@ -1717,7 +1726,9 @@ function generateReport() {
   h += tbl(
     ['Model','AMD/hr','USD/hr','Notes'],
     sorted.map(k => {
-      const cd = COST_AMD[k];
+      // Fall back to the geminiKind base for dynamic Gemini variants so they
+      // inherit the right AMD / USD rate instead of showing "?".
+      const cd = COST_AMD[k] || COST_AMD[MODEL_DEFS[k]?.geminiKind];
       const label = hEsc(MODEL_DEFS[k]?.label || k);
       if (!cd) return [label, '?', '?', '<em style="color:#94a3b8">No built-in pricing for this column — provide rate to compute.</em>'];
       if (cd.amd == null)  return [label, '—', '—', hEsc(cd.note || 'Custom — contact vendor')];
@@ -1737,7 +1748,9 @@ function generateReport() {
     ['Model','Char Acc','AMD/hr','Efficiency'],
     sorted.map(k => {
       const acc = modelStats[k].avgCharAcc ?? 0;
-      const cd = COST_AMD[k];
+      // Fall back to the geminiKind base for dynamic Gemini variants so they
+      // inherit the right AMD / USD rate instead of showing "?".
+      const cd = COST_AMD[k] || COST_AMD[MODEL_DEFS[k]?.geminiKind];
       const eff = cd?.amd == null ? '? (unknown cost)' : cd.amd === 0 ? '♾️ ∞ (Free)' : (acc / cd.amd * 100).toFixed(2);
       return [
         hEsc(MODEL_DEFS[k]?.label || k),
@@ -1752,7 +1765,9 @@ function generateReport() {
   h += tbl(
     ['Model','AMD/month','USD/month'],
     sorted.map(k => {
-      const cd = COST_AMD[k];
+      // Fall back to the geminiKind base for dynamic Gemini variants so they
+      // inherit the right AMD / USD rate instead of showing "?".
+      const cd = COST_AMD[k] || COST_AMD[MODEL_DEFS[k]?.geminiKind];
       if (cd?.amd == null) return [hEsc(MODEL_DEFS[k]?.label || k), '?', '?'];
       const amdM = cd.amd * 200;
       return [
