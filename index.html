@@ -240,6 +240,90 @@ const MODEL_DEFS = {
 };
 
 // ══════════════════════════════════════════════
+//  TOKEN PRICING — Gemini models only
+// ══════════════════════════════════════════════
+// User-provided 2026 rates. Each model key gets a base; column-name
+// annotations like "(Low)" / "(High)" / "+ SP" can override the
+// thinking level and system-prompt flag at runtime.
+const GEMINI_PRICING_BASE = {
+  // Gemini 3.0 Flash Preview — Input $0.50/1M, Output $3.00/1M
+  gemini_flash_prev: { tier: '3.0 Flash Preview', inputPer1M: 0.50, outputPer1M: 3.00, thinking: 'low',  hasSP: false },
+  // "Gemini + System Prompt" — same model as above, SP enabled
+  gemini_sp:         { tier: '3.0 Flash Preview', inputPer1M: 0.50, outputPer1M: 3.00, thinking: 'low',  hasSP: true  },
+  // Gemini 3.5 Flash — Input $1.50/1M, Output $9.00/1M
+  gemini_flash:      { tier: '3.5 Flash',         inputPer1M: 1.50, outputPer1M: 9.00, thinking: 'high', hasSP: false },
+};
+const THINKING_TOKENS  = { low: 1000, high: 6000 }; // midpoints of user's ranges
+const SYSTEM_PROMPT_TOKENS = 680;
+const AUDIO_TOKENS_PER_SEC = 32;       // Gemini audio tokenisation rate
+const WORDS_PER_MIN_EST    = 150;       // average speech rate for duration estimation
+
+function isGeminiModel(k)      { return GEMINI_PRICING_BASE[k] != null; }
+function detectThinking(name)  { return /\(\s*high\b/i.test(name) ? 'high' : /\(\s*low\b/i.test(name) ? 'low' : null; }
+function detectSysPrompt(name) { return /system\s*prompt|\+\s*sp\b|\bwith\s+sp\b/i.test(name); }
+function detectTier(name) {
+  if (/3\.5/.test(name) || /3\s*5/.test(name)) return '3.5';
+  return '3.0';
+}
+
+function modelPricing(modelKey, columnName) {
+  const base = GEMINI_PRICING_BASE[modelKey];
+  if (!base) return null;
+  const colName = columnName || '';
+  // Column may override tier (e.g. SP column actually using 3.5)
+  const tier = detectTier(colName) === '3.5' ? '3.5' : base.tier.startsWith('3.5') ? '3.5' : '3.0';
+  const inputPer1M  = tier === '3.5' ? 1.50 : 0.50;
+  const outputPer1M = tier === '3.5' ? 9.00 : 3.00;
+  const thinking = detectThinking(colName) || base.thinking;
+  return {
+    tier: tier === '3.5' ? '3.5 Flash' : '3.0 Flash Preview',
+    inputPer1M, outputPer1M,
+    thinkingLevel: thinking,
+    thinkingTokens: THINKING_TOKENS[thinking],
+    hasSP: detectSysPrompt(colName) || base.hasSP,
+  };
+}
+
+// Estimate audio duration (in seconds) from OG transcription word count.
+// Average human speech is ~150 wpm. Use a CSV duration column if present;
+// otherwise fall back to text-based estimate.
+function estimateDurationSec(ogText, row) {
+  // If user added a "duration_sec" / "seconds" / "duration" column, use it.
+  if (row && typeof row === 'object') {
+    for (const k of Object.keys(row)) {
+      if (/^(?:duration_?sec|duration|seconds|secs|length_?sec|audio_?duration)$/i.test(k)) {
+        const v = parseFloat(row[k]);
+        if (!isNaN(v) && v > 0) return v;
+      }
+    }
+  }
+  const words = (ogText || '').trim().split(/\s+/).filter(Boolean).length;
+  return words / (WORDS_PER_MIN_EST / 60); // words * 0.4
+}
+
+// Output text tokens (rough — ~4 chars/token).
+function estimateOutputTextTokens(text) {
+  return Math.max(1, Math.ceil((text || '').length / 4));
+}
+
+function computeSegmentCost(ogText, hypText, pricing, sourceRow) {
+  if (!pricing) return null;
+  const durSec = estimateDurationSec(ogText, sourceRow);
+  const audioTokens   = Math.round(durSec * AUDIO_TOKENS_PER_SEC);
+  const spTokens      = pricing.hasSP ? SYSTEM_PROMPT_TOKENS : 0;
+  const outputText    = estimateOutputTextTokens(hypText);
+  const thinkingTok   = pricing.thinkingTokens;
+  const inputTokens   = audioTokens + spTokens;
+  const outputTokens  = outputText + thinkingTok;
+  const inputCost     = inputTokens  * pricing.inputPer1M  / 1_000_000;
+  const outputCost    = outputTokens * pricing.outputPer1M / 1_000_000;
+  return {
+    durSec, audioTokens, spTokens, outputTextTokens: outputText, thinkingTokens: thinkingTok,
+    inputTokens, outputTokens, inputCost, outputCost, totalCost: inputCost + outputCost,
+  };
+}
+
+// ══════════════════════════════════════════════
 //  STATE
 // ══════════════════════════════════════════════
 let csvData = [], csvHeaders = [], colMapping = {}, analysisResult = null;
@@ -1235,7 +1319,7 @@ function generateReport() {
   // ── TOC ───────────────────────────────────────────────────────────────────
   h += tag('h2', S.h2, '📑 Table of Contents');
   h += '<div style="' + S.toc + '"><ol style="margin:0;padding-left:22px;line-height:1.9">';
-  ['Executive Summary','Methodology','Overall Results','Model-by-Model Analysis','Cost Analysis','Final Recommendations','Per-Segment Analysis','Glossary'].forEach((t, i) => {
+  ['Executive Summary','Methodology','Overall Results','Model-by-Model Analysis','Cost Analysis','Final Recommendations','Per-Segment Analysis','Token & Cost Summary (Gemini)','Glossary'].forEach((t, i) => {
     h += '<li><a href="#sec' + (i+1) + '" style="color:#6366f1;text-decoration:none">' + t + '</a></li>';
   });
   h += '</ol></div>';
@@ -1488,14 +1572,126 @@ function generateReport() {
       h += ' <span style="font-weight:400;color:#94a3b8;font-size:.78rem">— WER ' + fmtPct(m.wer) + ' · CER ' + fmtPct(m.cer) + '</span></div>';
       h += '<div style="background:#fafafa;border:1px solid #f1f5f9;padding:10px 14px;border-radius:4px;font-size:.92rem">';
       h += renderHypWithCombinedDiff(hypTokens, enriched);
-      h += '</div></div>';
+      h += '</div>';
+
+      // Token & cost breakdown — Gemini models only.
+      if (isGeminiModel(k)) {
+        const colName = colMapping[k] || '';
+        const pricing = modelPricing(k, colName);
+        const cost = computeSegmentCost(row.rawRef, m.rawHyp, pricing, csvData[row.idx]);
+        if (cost) {
+          h += '<div style="margin-top:10px;padding:10px 14px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:4px;font-size:.84rem">';
+          h += '<div style="font-weight:700;color:#0369a1;margin-bottom:6px">💰 Tokens &amp; cost · '
+            +  pricing.tier + (pricing.hasSP ? ' + SP' : '')
+            +  ' · ' + pricing.thinkingLevel + '-thinking</div>';
+          h += '<table style="border-collapse:collapse;width:100%;font-size:.84rem">';
+          h += '<thead><tr style="color:#0c4a6e">'
+            +  '<th style="text-align:left;padding:3px 6px;border-bottom:1px solid #bae6fd">Component</th>'
+            +  '<th style="text-align:right;padding:3px 6px;border-bottom:1px solid #bae6fd">Tokens</th>'
+            +  '<th style="text-align:right;padding:3px 6px;border-bottom:1px solid #bae6fd">Rate</th>'
+            +  '<th style="text-align:right;padding:3px 6px;border-bottom:1px solid #bae6fd">Cost (USD)</th>'
+            +  '</tr></thead><tbody>';
+          const row1 = (label, tokens, rate, c) => '<tr>'
+            + '<td style="padding:3px 6px">' + label + '</td>'
+            + '<td style="text-align:right;padding:3px 6px;font-variant-numeric:tabular-nums">' + tokens.toLocaleString() + '</td>'
+            + '<td style="text-align:right;padding:3px 6px;color:#64748b">$' + rate.toFixed(2) + '/1M</td>'
+            + '<td style="text-align:right;padding:3px 6px;font-variant-numeric:tabular-nums">$' + c.toFixed(6) + '</td>'
+            + '</tr>';
+          h += row1('Audio input (~' + cost.durSec.toFixed(1) + 's @ 32 tok/s)', cost.audioTokens, pricing.inputPer1M, cost.audioTokens * pricing.inputPer1M / 1e6);
+          if (cost.spTokens) h += row1('System prompt (fixed)', cost.spTokens, pricing.inputPer1M, cost.spTokens * pricing.inputPer1M / 1e6);
+          h += row1('Output text (model transcription)', cost.outputTextTokens, pricing.outputPer1M, cost.outputTextTokens * pricing.outputPer1M / 1e6);
+          h += row1('Thinking tokens (' + pricing.thinkingLevel + ', invisible)', cost.thinkingTokens, pricing.outputPer1M, cost.thinkingTokens * pricing.outputPer1M / 1e6);
+          h += '<tr style="font-weight:700;background:#e0f2fe">'
+            +  '<td style="padding:6px;border-top:2px solid #0369a1" colspan="3">Total this segment</td>'
+            +  '<td style="text-align:right;padding:6px;border-top:2px solid #0369a1;font-variant-numeric:tabular-nums">$' + cost.totalCost.toFixed(6) + '</td>'
+            +  '</tr>';
+          h += '</tbody></table>';
+          h += '<div style="margin-top:6px;font-size:.72rem;color:#64748b;font-style:italic">Audio duration estimated from OG text at ~150 wpm. For exact numbers, add a <code style="background:#e0f2fe;padding:1px 4px;border-radius:3px">duration_sec</code> column to the CSV.</div>';
+          h += '</div>';
+        }
+      }
+      h += '</div>';
     });
 
     h += '</div></details>';
   });
 
+  // ── 7b. TOKEN & COST SUMMARY (Gemini models) ──────────────────────────────
+  const geminiKeys = csvOrdered.filter(isGeminiModel);
+  if (geminiKeys.length) {
+    h += '<h2 id="sec8" style="' + S.h2 + '">💰 Token &amp; Cost Summary (Gemini)</h2>';
+    h += '<p style="font-size:.88rem;color:#475569">Per-segment + cumulative cost across all '
+      +  rowResults.length + ' segments. Audio duration estimated from OG text (~150 wpm @ 32 audio tokens/sec). '
+      +  'For exact figures, add a <code style="' + S.code + '">duration_sec</code> column to the CSV.</p>';
+
+    // Pricing reference table
+    h += '<h3 style="' + S.h3 + '">Pricing reference (per 1M tokens)</h3>';
+    h += tbl(
+      ['Model', 'Input / Audio', 'Output / Reasoning', 'Thinking estimate'],
+      geminiKeys.map(k => {
+        const p = modelPricing(k, colMapping[k] || '');
+        return [
+          hEsc(MODEL_DEFS[k]?.label || k) + (p.hasSP ? ' <em style="color:#94a3b8">(+ system prompt 680 tok)</em>' : ''),
+          '$' + p.inputPer1M.toFixed(2),
+          '$' + p.outputPer1M.toFixed(2),
+          p.thinkingLevel + ' (~' + p.thinkingTokens.toLocaleString() + ' tok/call)',
+        ];
+      })
+    );
+
+    // Per-segment cost table
+    h += '<h3 style="' + S.h3 + '">Per-segment cost (USD)</h3>';
+    h += tbl(
+      ['#'].concat(geminiKeys.map(k => hEsc(MODEL_DEFS[k]?.label || k))).concat(['Audio est.']),
+      rowResults.map((row, i) => {
+        const dur = estimateDurationSec(row.rawRef, csvData[row.idx]);
+        const cells = [String(i + 1)];
+        geminiKeys.forEach(k => {
+          const m = row.models[k];
+          if (!m) { cells.push('—'); return; }
+          const p = modelPricing(k, colMapping[k] || '');
+          const c = computeSegmentCost(row.rawRef, m.rawHyp, p, csvData[row.idx]);
+          cells.push(c ? '$' + c.totalCost.toFixed(6) : '—');
+        });
+        cells.push('~' + dur.toFixed(1) + 's');
+        return cells;
+      })
+    );
+
+    // Cumulative totals
+    h += '<h3 style="' + S.h3 + '">Cumulative totals</h3>';
+    const totals = geminiKeys.map(k => {
+      const p = modelPricing(k, colMapping[k] || '');
+      let sum = 0, segs = 0, inTok = 0, outTok = 0;
+      rowResults.forEach(row => {
+        const m = row.models[k];
+        if (!m) return;
+        const c = computeSegmentCost(row.rawRef, m.rawHyp, p, csvData[row.idx]);
+        if (!c) return;
+        sum += c.totalCost; inTok += c.inputTokens; outTok += c.outputTokens; segs++;
+      });
+      return { k, p, sum, segs, inTok, outTok };
+    });
+    h += tbl(
+      ['Model', 'Segments', 'Input tokens (total)', 'Output tokens (total)', 'Cumulative cost'],
+      totals.map(t => [
+        hEsc(MODEL_DEFS[t.k]?.label || t.k),
+        String(t.segs),
+        t.inTok.toLocaleString(),
+        t.outTok.toLocaleString(),
+        '<strong>$' + t.sum.toFixed(4) + '</strong>',
+      ])
+    );
+
+    h += '<div style="' + S.legend + ';margin-top:8px"><strong>How costs are computed:</strong> '
+      +  'Audio input tokens = est. duration × 32 tok/s. '
+      +  'System prompt = 680 tok flat (only on models with SP detected). '
+      +  'Output = transcription chars/4 + thinking-token estimate (low ≈ 1,000, high ≈ 6,000, both billed at output rate). '
+      +  'Detected from column names: <code style="' + S.code + '">(Low)</code>, <code style="' + S.code + '">(High)</code>, <code style="' + S.code + '">+ SP</code> / <code style="' + S.code + '">System Prompt</code>, <code style="' + S.code + '">3.5</code> for tier.</div>';
+  }
+
   // ── 8. GLOSSARY ───────────────────────────────────────────────────────────
-  h += '<h2 id="sec8" style="' + S.h2 + '">📖 Glossary</h2>';
+  h += '<h2 id="sec9" style="' + S.h2 + '">📖 Glossary</h2>';
   h += tbl(
     ['Term','Definition','Ideal'],
     [
